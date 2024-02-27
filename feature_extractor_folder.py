@@ -7,18 +7,38 @@ import numpy as np
 import os
 
 # Load the ViT image processor
-processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224")
+processor = ViTImageProcessor.from_pretrained("google/vit-base-patch16-224-in21k")
 
 
-def extract_features(image_path):
-    # Load image
-    image = Image.open(image_path).convert("RGB")
+def extract_vit_features(image):
+    # Load the ViT feature extractor
     inputs = processor(images=image, return_tensors="pt")
+    return inputs.pixel_values
 
-    # Retrieve the extracted features
-    features = inputs.pixel_values
 
-    return features
+def weighted_feature_fusion(original_feature, vit_feature, alpha=0.7, beta=0.3):
+    """
+    Reads a PNG image, extracts features, and performs weighted feature fusion.
+
+    Args:
+      img_path: Path to the PNG image file.
+      vit_feature: A 3-dimensional numpy array representing the ViT feature (height, width, channels).
+      original_feature: A 3-dimensional numpy array representing the original feature (height, width, channels).
+      alpha: Weight for the ViT feature (between 0 and 1).
+      beta: Weight for the original feature (between 0 and 1).
+
+    Returns:
+      A 3-dimensional numpy array representing the combined feature (height, width, channels).
+    """
+
+    # Ensure shape compatibility with features
+    if img_array.shape[0:2] != vit_feature.shape[0:2] or img_array.shape[2] != 3:
+        raise ValueError("Image size and feature shapes must be compatible.")
+
+    # Perform weighted feature fusion
+    combined_feature = (alpha * vit_feature + beta * original_feature).astype("uint8")
+
+    return combined_feature
 
 
 def transform_image(features):
@@ -35,7 +55,7 @@ def transform_image(features):
     )
 
     # Convert tensor to PIL image
-    return transform(features[0])
+    return np.array(transform(features[0]))
 
 
 def read_folder_names(folder_path):
@@ -55,21 +75,40 @@ def remove_files_in_folder(folder_path):
             os.remove(file_path)
 
 
-ROOT_FOLDER = "dataset/Plant_leave_diseases_dataset_without_augmentation"
-all_classes_names = read_folder_names(ROOT_FOLDER)
+ROOT_FOLDER = "/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/dataset/Plant_leaf_diseases_dataset/"
+DESTINATION_FOLDER = "/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/features_extracted_dataset/"
+if not os.path.exists(DESTINATION_FOLDER):
+    os.makedirs(DESTINATION_FOLDER)
+subfolder_names = read_folder_names(ROOT_FOLDER)
+all_classes_names = read_folder_names(f"{ROOT_FOLDER}/{subfolder_names[0]}")
 
-for class_name in all_classes_names:
-    print(class_name)
-    image_folder = f"{ROOT_FOLDER}/{class_name}"
-    output_folder = f"/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/save/{class_name}"
-    remove_files_in_folder(output_folder)
+print(subfolder_names)
+print(all_classes_names)
 
-    for image_file in os.listdir(image_folder):
-        image_path = os.path.join(image_folder, image_file)
-        features = extract_features(image_path)
-        image = transform_image(features=features)
+for subfolder_name in subfolder_names:
+    for class_name in all_classes_names:
+        print(class_name)
+        image_folder = f"{ROOT_FOLDER}/{subfolder_name}/{class_name}"
+        output_folder = f"{DESTINATION_FOLDER}{subfolder_name}/{class_name}"
+        print(output_folder)
+        # Create the destination folder if it doesn't exist
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
 
-        # Save processed features as PNG
-        image_name = f"{os.path.splitext(os.path.basename(image_file))[0]}_features.png"
-        output_path = os.path.join(output_folder, image_name)
-        image.save(output_path)
+        for image_file in os.listdir(image_folder):
+            image_path = os.path.join(image_folder, image_file)
+            img = Image.open(image_path).convert("RGB")
+            img_array = np.array(img.resize((224, 224)))
+            vit_feature = extract_vit_features(img)
+            vit_feature_transformed = transform_image(vit_feature)
+            combined_feature = weighted_feature_fusion(
+                img_array, vit_feature_transformed, alpha=0.7, beta=0.3
+            )
+            img_combined = Image.fromarray(combined_feature)
+
+            # Save processed features as PNG
+            image_name = (
+                f"{os.path.splitext(os.path.basename(image_file))[0]}_features.png"
+            )
+            output_path = os.path.join(output_folder, image_name)
+            img_combined.save(output_path)
