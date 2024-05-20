@@ -2,6 +2,8 @@
 
 This repository contains the code and configuration files for training a YOLOv8n-cls model with Vision Transformer (ViT) features for plant disease classification. The model is trained from scratch on Google Colab Pro using a custom dataset of pre-extracted features.
 
+!["The Proposed Method"](the_proposed%20method.png)
+
 ### Project Goals
 
 * Leverage YOLOv8n-cls architecture, optimized for classification tasks, for plant disease identification.
