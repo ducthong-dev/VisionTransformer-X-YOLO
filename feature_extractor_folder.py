@@ -16,7 +16,7 @@ def extract_vit_features(image):
     return inputs.pixel_values
 
 
-def weighted_feature_fusion(original_feature, vit_feature, alpha=0.7, beta=0.3):
+def weighted_feature_fusion(original_feature, vit_feature, alpha, beta):
     """
     Reads a PNG image, extracts features, and performs weighted feature fusion.
 
@@ -75,8 +75,40 @@ def remove_files_in_folder(folder_path):
             os.remove(file_path)
 
 
+def get_image_files(path):
+    """
+    This function returns a list of image filenames in a directory.
+
+    Args:
+        path: The directory path to search for images.
+
+    Returns:
+        A list of image filenames.
+    """
+    files = os.listdir(path)
+    images = [f for f in files if is_image_file(f)]
+    return images
+
+
+def is_image_file(filename):
+    """
+    This function checks if a filename has a common image extension.
+
+    Args:
+        filename: The filename to check.
+
+    Returns:
+        True if the filename has a common image extension, False otherwise.
+    """
+    extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
+    for ext in extensions:
+        if filename.lower().endswith(ext):
+            return True
+    return False
+
+
 ROOT_FOLDER = "/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/dataset/Plant_leaf_diseases_dataset/"
-DESTINATION_FOLDER = "/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/features_extracted_dataset/"
+DESTINATION_FOLDER = "/Users/ducthong/Desktop/AI/Computer Vision/Vision Transformer/dataset/features_extracted_dataset-(0.2-0.8)/"
 if not os.path.exists(DESTINATION_FOLDER):
     os.makedirs(DESTINATION_FOLDER)
 subfolder_names = read_folder_names(ROOT_FOLDER)
@@ -94,15 +126,15 @@ for subfolder_name in subfolder_names:
         # Create the destination folder if it doesn't exist
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-
-        for image_file in os.listdir(image_folder):
+        remove_files_in_folder(output_folder)
+        for image_file in get_image_files(image_folder):
             image_path = os.path.join(image_folder, image_file)
             img = Image.open(image_path).convert("RGB")
             img_array = np.array(img.resize((224, 224)))
             vit_feature = extract_vit_features(img)
             vit_feature_transformed = transform_image(vit_feature)
             combined_feature = weighted_feature_fusion(
-                img_array, vit_feature_transformed, alpha=0.7, beta=0.3
+                img_array, vit_feature_transformed, alpha=0.2, beta=0.8
             )
             img_combined = Image.fromarray(combined_feature)
 

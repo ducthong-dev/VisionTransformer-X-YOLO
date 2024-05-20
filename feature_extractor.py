@@ -27,6 +27,7 @@ features = inputs.pixel_values
 # Print the shape of the extracted features
 print(features.shape)  # Output: torch.Size([1, 196, 768])
 
+
 # Define transformations
 transform = transforms.Compose(
     [

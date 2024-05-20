@@ -1,0 +1,211 @@
+Ultralytics YOLOv8.1.19 🚀 Python-3.10.12 torch-2.1.0+cu121 CUDA:0 (Tesla T4, 15102MiB)
+engine/trainer: task=classify, mode=train, model=yolov8n-cls.pt, data=/content/dataset/Plant_leaf_diseases_dataset, epochs=30, time=None, patience=100, batch=128, imgsz=224, save=True, save_period=-1, cache=False, device=0, workers=8, project=None, name=train7, exist_ok=False, pretrained=True, optimizer=auto, verbose=True, seed=0, deterministic=True, single_cls=False, rect=False, cos_lr=False, close_mosaic=10, resume=False, amp=True, fraction=1.0, profile=False, freeze=None, multi_scale=False, overlap_mask=True, mask_ratio=4, dropout=0.0, val=True, split=val, save_json=False, save_hybrid=False, conf=None, iou=0.7, max_det=300, half=False, dnn=False, plots=True, source=None, vid_stride=1, stream_buffer=False, visualize=False, augment=False, agnostic_nms=False, classes=None, retina_masks=False, embed=None, show=False, save_frames=False, save_txt=False, save_conf=False, save_crop=False, show_labels=True, show_conf=True, show_boxes=True, line_width=None, format=torchscript, keras=False, optimize=False, int8=False, dynamic=False, simplify=False, opset=None, workspace=4, nms=False, lr0=0.01, lrf=0.01, momentum=0.937, weight_decay=0.0005, warmup_epochs=3.0, warmup_momentum=0.8, warmup_bias_lr=0.1, box=7.5, cls=0.5, dfl=1.5, pose=12.0, kobj=1.0, label_smoothing=0.0, nbs=64, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, degrees=0.0, translate=0.1, scale=0.5, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.5, mosaic=1.0, mixup=0.0, copy_paste=0.0, auto_augment=randaugment, erasing=0.4, crop_fraction=1.0, cfg=None, tracker=botsort.yaml, save_dir=runs/classify/train7
+train: /content/dataset/Plant_leaf_diseases_dataset/train... found 38584 images in 39 classes ✅ 
+val: /content/dataset/Plant_leaf_diseases_dataset/val... found 8340 images in 39 classes ✅ 
+test: /content/dataset/Plant_leaf_diseases_dataset/test... found 8335 images in 39 classes ✅ 
+Overriding model.yaml nc=1000 with nc=39
+
+                   from  n    params  module                                       arguments                     
+  0                  -1  1       464  ultralytics.nn.modules.conv.Conv             [3, 16, 3, 2]                 
+  1                  -1  1      4672  ultralytics.nn.modules.conv.Conv             [16, 32, 3, 2]                
+  2                  -1  1      7360  ultralytics.nn.modules.block.C2f             [32, 32, 1, True]             
+  3                  -1  1     18560  ultralytics.nn.modules.conv.Conv             [32, 64, 3, 2]                
+  4                  -1  2     49664  ultralytics.nn.modules.block.C2f             [64, 64, 2, True]             
+  5                  -1  1     73984  ultralytics.nn.modules.conv.Conv             [64, 128, 3, 2]               
+  6                  -1  2    197632  ultralytics.nn.modules.block.C2f             [128, 128, 2, True]           
+  7                  -1  1    295424  ultralytics.nn.modules.conv.Conv             [128, 256, 3, 2]              
+  8                  -1  1    460288  ultralytics.nn.modules.block.C2f             [256, 256, 1, True]           
+  9                  -1  1    380199  ultralytics.nn.modules.head.Classify         [256, 39]                     
+YOLOv8n-cls summary: 99 layers, 1488247 parameters, 1488247 gradients, 3.4 GFLOPs
+Transferred 156/158 items from pretrained weights
+TensorBoard: Start with 'tensorboard --logdir runs/classify/train7', view at http://localhost:6006/
+AMP: running Automatic Mixed Precision (AMP) checks with YOLOv8n...
+AMP: checks passed ✅
+train: Scanning /content/dataset/Plant_leaf_diseases_dataset/train... 38584 images, 0 corrupt: 100%|██████████| 38584/38584 [00:00<?, ?it/s]
+val: Scanning /content/dataset/Plant_leaf_diseases_dataset/val... 8340 images, 0 corrupt: 100%|██████████| 8340/8340 [00:00<?, ?it/s]
+optimizer: 'optimizer=auto' found, ignoring 'lr0=0.01' and 'momentum=0.937' and determining best 'optimizer', 'lr0' and 'momentum' automatically... 
+optimizer: AdamW(lr=0.000714, momentum=0.9) with parameter groups 26 weight(decay=0.0), 27 weight(decay=0.001), 27 bias(decay=0.0)
+TensorBoard: model graph visualization added ✅
+Image sizes 224 train, 224 val
+Using 2 dataloader workers
+Logging results to runs/classify/train7
+Starting training for 30 epochs...
+
+      Epoch    GPU_mem       loss  Instances       Size
+       1/30      1.59G        1.8         56        224: 100%|██████████| 302/302 [03:38<00:00,  1.38it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]                   all      0.931      0.997
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       2/30      1.39G     0.2335         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:24<00:00,  1.33it/s]                   all      0.971      0.999
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       3/30      1.39G     0.1394         56        224: 100%|██████████| 302/302 [03:32<00:00,  1.42it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:24<00:00,  1.32it/s]                   all      0.972          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       4/30      1.39G     0.1085         56        224: 100%|██████████| 302/302 [03:31<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:24<00:00,  1.32it/s]                   all       0.98          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       5/30      1.39G    0.08807         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:27<00:00,  1.22it/s]                   all      0.985          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       6/30      1.39G    0.07173         56        224: 100%|██████████| 302/302 [03:31<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]                   all      0.988          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       7/30      1.39G    0.06385         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.29it/s]                   all       0.99          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       8/30      1.39G    0.05691         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.29it/s]                   all      0.986          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+       9/30      1.39G    0.05377         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.30it/s]                   all      0.991          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      10/30      1.39G    0.04671         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.27it/s]                   all      0.992          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      11/30      1.39G    0.04661         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.28it/s]                   all      0.991          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      12/30      1.39G    0.03793         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.27it/s]                   all      0.992          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      13/30      1.39G    0.03766         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.29it/s]                   all      0.993          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      14/30      1.39G    0.03254         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]                   all      0.995          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      15/30      1.39G    0.03136         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.29it/s]                   all      0.994          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      16/30      1.39G    0.02894         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.24it/s]                   all      0.995          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      17/30      1.39G    0.02632         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.27it/s]                   all      0.994          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      18/30      1.39G    0.02795         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.25it/s]                   all      0.996          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      19/30      1.39G    0.02272         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.30it/s]                   all      0.995          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      20/30      1.39G    0.02453         56        224: 100%|██████████| 302/302 [03:28<00:00,  1.45it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:24<00:00,  1.32it/s]                   all      0.994          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      21/30      1.39G    0.02062         56        224: 100%|██████████| 302/302 [03:34<00:00,  1.41it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]                   all      0.995          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      22/30      1.39G    0.01894         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.25it/s]                   all      0.995          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      23/30      1.39G    0.01727         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.25it/s]                   all      0.996          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      24/30      1.39G    0.01637         56        224: 100%|██████████| 302/302 [03:31<00:00,  1.43it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.28it/s]                   all      0.997          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      25/30      1.39G    0.01469         56        224: 100%|██████████| 302/302 [03:29<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.32it/s]
+                   all      0.996          1
+
+      Epoch    GPU_mem       loss  Instances       Size
+      26/30      1.39G    0.01464         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.28it/s]                   all      0.996          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      27/30      1.39G    0.01354         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.27it/s]                   all      0.996          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      28/30      1.39G    0.01167         56        224: 100%|██████████| 302/302 [03:30<00:00,  1.44it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]                   all      0.997          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      29/30      1.39G    0.01061         56        224: 100%|██████████| 302/302 [03:33<00:00,  1.42it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.23it/s]                   all      0.996          1
+
+
+      Epoch    GPU_mem       loss  Instances       Size
+      30/30      1.39G    0.01023         56        224: 100%|██████████| 302/302 [03:40<00:00,  1.37it/s]
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:25<00:00,  1.27it/s]                   all      0.997          1
+
+
+30 epochs completed in 1.980 hours.
+Optimizer stripped from runs/classify/train7/weights/last.pt, 3.1MB
+Optimizer stripped from runs/classify/train7/weights/best.pt, 3.1MB
+
+Validating runs/classify/train7/weights/best.pt...
+Ultralytics YOLOv8.1.19 🚀 Python-3.10.12 torch-2.1.0+cu121 CUDA:0 (Tesla T4, 15102MiB)
+YOLOv8n-cls summary (fused): 73 layers, 1484839 parameters, 0 gradients, 3.3 GFLOPs
+train: /content/dataset/Plant_leaf_diseases_dataset/train... found 38584 images in 39 classes ✅ 
+val: /content/dataset/Plant_leaf_diseases_dataset/val... found 8340 images in 39 classes ✅ 
+test: /content/dataset/Plant_leaf_diseases_dataset/test... found 8335 images in 39 classes ✅ 
+               classes   top1_acc   top5_acc: 100%|██████████| 33/33 [00:26<00:00,  1.26it/s]
+                   all      0.997          1
+Speed: 0.1ms preprocess, 0.2ms inference, 0.0ms loss, 0.0ms postprocess per image
+Results saved to runs/classify/train7
+Results saved to runs/classify/train7
+ultralytics.utils.metrics.ClassifyMetrics object with attributes:
+
+confusion_matrix: <ultralytics.utils.metrics.ConfusionMatrix object at 0x7f68919d0880>
+curves: []
+curves_results: []
+fitness: 0.9982613921165466
+keys: ['metrics/accuracy_top1', 'metrics/accuracy_top5']
+results_dict: {'metrics/accuracy_top1': 0.9968824982643127, 'metrics/accuracy_top5': 0.9996402859687805, 'fitness': 0.9982613921165466}
+save_dir: PosixPath('runs/classify/train7')
+speed: {'preprocess': 0.07327903660653019, 'inference': 0.19716255956416506, 'loss': 6.835237681436882e-05, 'postprocess': 5.4173046450534884e-05}
+task: 'classify'
+top1: 0.9968824982643127
+top5: 0.9996402859687805
