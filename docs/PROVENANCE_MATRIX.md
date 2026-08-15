@@ -111,7 +111,7 @@ This is three short runs, not a sweep, and it converts two LOW-confidence recons
 
 `A5_aetfpe_full` uses a denoising objective, so its AE sees synthetic noise during training. `F1_fusion_add`, `F2_fusion_concat` and `F4_fusion_attention` do not. Comparing A5 against them would have attributed to *"AE fusion"* a gain partly caused by noise exposure. That would have been a genuine confound in the headline fusion table Reviewer #12 asked for.
 
-**Fix:** added `D1_ae_standard` — identical to A5 in every respect except `ae_denoising: false` (verified: the two configs differ in exactly one flag; both have 87,549,150 parameters). The fusion table now uses D1, whose training data is clean like every conventional operator's.
+**Fix:** added `D1_ae_standard` — identical to A5 in every respect except `ae_denoising: false` (verified: the two configs differ in exactly one flag; both have 87,549,123 parameters). The fusion table now uses D1, whose training data is clean like every conventional operator's.
 
 | Comparison | What it isolates | Valid? |
 |---|---|---|
@@ -173,7 +173,7 @@ mechanism with noise exposure (§3.1).
 
 | ID | Differs from A5 by | Answers |
 |---|---|---|
-| D1_ae_standard | `ae_denoising: false` only — verified: one config key, identical 87,549,150 parameters | #10.4. `A5 − D1` isolates the denoising objective |
+| D1_ae_standard | `ae_denoising: false` only — verified: one config key, identical 87,549,123 parameters | #10.4. `A5 − D1` isolates the denoising objective |
 
 ### Group 4 — Mechanism controls (3 unique)
 

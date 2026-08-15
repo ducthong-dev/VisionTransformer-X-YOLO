@@ -40,7 +40,7 @@ required.
 | A2_tf_only | [2,6,224,224] | – | [2,3,224,224] | 87,289,243 | 1,490,587 | 85,800,996 | [0.35, 0.62] |
 | A3_pe_tf_no_ae | [2,6,224,224] | – | [2,3,224,224] | 87,289,243 | 1,490,587 | 85,800,996 | [0.31, 0.54] |
 | A4_rgb_ae | [2,3,224,224] | [2,128,28,28] | [2,3,224,224] | 1,747,290 | 1,747,290 | 259,043 | [0.45, 0.55] |
-| **A5_aetfpe_full** | [2,6,224,224] | [2,128,28,28] | [2,3,224,224] | 87,549,150 | 1,750,494 | 86,060,903 | [0.45, 0.55] |
+| **A5_aetfpe_full** | [2,6,224,224] | [2,128,28,28] | [2,3,224,224] | 87,549,123 | 1,750,467 | 86,060,876 | [0.45, 0.55] |
 | F1_fusion_add | [2,6,224,224] | – | [2,3,224,224] | 87,289,216 | 1,490,560 | 85,800,969 | [0.22, 0.80] |
 | F2_fusion_concat | [2,6,224,224] | – | **[2,6,224,224]** | 87,289,648 | 1,490,992 | 85,800,969 | [0.00, 1.00] |
 | F4_fusion_attention | [2,6,224,224] | – | [2,3,224,224] | 87,289,288 | 1,490,632 | 85,801,041 | [0.41, 0.62] |
@@ -66,6 +66,49 @@ The ViT contributes 85.8 M **frozen** parameters; trainable counts stay near the
 
 Both parameter count and transfer ratio reproduce exactly, which is the evidence
 that the custom training loop wraps the same classifier the original used.
+
+### 1.3a Bug found and fixed during G1 implementation (dead fusion module)
+
+Extending `check_shapes.py` with a real backward pass (Step 6 of the
+implementation prompt) caught a genuine defect: for `A5_aetfpe_full` and
+`D1_ae_standard`, `fusion.proj.{weight,bias}` and `fusion.norm.{weight,bias}`
+were trainable parameters with permanently `None` gradients after
+`loss.backward()`.
+
+**Cause:** `AETFPE.__init__` built `self.fusion` unconditionally, and
+`frontend()` called `self.fusion(pe, tf)` unconditionally whenever a transformer
+branch existed — even for `use_ae=True` arms, where `out = recon` from the
+auto-encoder always overrides the fusion module's output. The fusion forward
+pass ran every step and its result was discarded; its parameters could
+therefore never receive a gradient.
+
+**This is an implementation defect, not a scientific one.** It does not change
+what any arm computes: for `use_ae=True` arms, the AE has always consumed the
+concatenated `[PE-RGB ; TF-RGB]` map directly (`ARCHITECTURE_RECOVERY.md`
+§2.4 — "the AE always consumes the concatenated map... a genuine alternative to
+the [fusion] operators... rather than a wrapper around one of them"). The dead
+module was never part of that computation. The fix removes it entirely rather
+than merely skip calling it, so the inert parameters no longer exist:
+
+```python
+if cfg.use_ae:
+    self.fusion = None          # was: built and called, but its output discarded
+    ...
+else:
+    self.fusion = build_fusion(...)
+```
+
+**Effect on parameter counts:** A5 and D1 both drop by 27 parameters (a
+`Conv2d(6,3,1)` + `BatchNorm2d(3)`): **87,549,150 → 87,549,123** total,
+**1,750,494 → 1,750,467** trainable. No other arm is affected. All figures in
+this document and in `PROVENANCE_MATRIX.md` reflect the corrected count.
+
+**Verification after the fix:** `check_shapes.py --device cpu` and `--device
+mps`, now checking forward finiteness, backward-pass completeness (every
+trainable parameter receives a finite gradient), and expected parameter counts
+for YOLO arms — **16/16 pass** on both devices. This is a development sanity
+check; official G1 sign-off requires the identical command with `--device
+cuda` on Colab (see `COLAB_CAMPAIGN_PLAN.md` G1).
 
 ### 1.3 Bug found and fixed during validation
 
@@ -271,7 +314,7 @@ on Colab from a fully trained model.
 | A4_rgb_ae | 1,747,290 | 1,747,290 | 2.473 |
 | A2 / A3 | 87,289,243 | 1,490,587 | 34.141 |
 | F1 / F2 / F4 | ~87,289,300 | ~1,490,700 | ~34.14 |
-| A5_aetfpe_full | 87,549,150 | 1,750,494 | 36.225 |
+| A5_aetfpe_full | 87,549,123 | 1,750,467 | 36.225 |
 | B1_resnet50 | 23,587,943 | 23,587,943 | 8.264 |
 | B2_efficientnet_b0 | 4,057,507 | 4,057,507 | 0.828 |
 | B3_vit_b16 | 85,828,647 | 85,828,647 | 22.571 |

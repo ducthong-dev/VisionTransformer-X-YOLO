@@ -105,14 +105,20 @@ class AETFPE(nn.Module):
             else None
         )
 
-        fusion_name = cfg.fusion if cfg.use_tf else "identity"
-        self.fusion = build_fusion(fusion_name, in_channels=6)
-        fused_ch = self.fusion.out_channels
-
         if cfg.use_ae:
             # The AE always consumes the *concatenated* map when both branches
-            # exist, so AE fusion is a genuine alternative to the operators above
-            # rather than a wrapper around one of them.
+            # exist, so AE fusion is a genuine alternative to the operators below
+            # rather than a wrapper around one of them. `self.fusion` is not
+            # built at all in this case: an earlier version built it
+            # unconditionally and called it in forward() regardless of use_ae,
+            # which computed a full fusion forward pass every step and then
+            # discarded the result (`out = recon` always overrode it). That
+            # left `fusion.*` as trainable parameters with permanently-None
+            # gradients -- caught by G1's backward-pass check. Not building the
+            # module at all removes the dead compute and the dead parameters;
+            # it does not change any arm's actual forward computation, since
+            # `fused` was never used when use_ae=True.
+            self.fusion = None
             self.ae_in_channels = 6 if cfg.use_tf else 3
             self.ae = StackedSparseDenoisingAE(
                 in_channels=self.ae_in_channels,
@@ -122,9 +128,11 @@ class AETFPE(nn.Module):
             )
             classifier_in = 3
         else:
+            fusion_name = cfg.fusion if cfg.use_tf else "identity"
+            self.fusion = build_fusion(fusion_name, in_channels=6)
             self.ae = None
             self.ae_in_channels = 0
-            classifier_in = fused_ch
+            classifier_in = self.fusion.out_channels
 
         self.classifier_in_channels = classifier_in
         self.classifier = build_classifier(
@@ -157,11 +165,9 @@ class AETFPE(nn.Module):
         if self.tf is not None:
             tf = self.tf(pe)
             fused_for_ae = torch.cat([pe, tf], dim=1)
-            fused = self.fusion(pe, tf)
         else:
             tf = None
             fused_for_ae = pe
-            fused = pe
 
         parts["pre_ae"] = fused_for_ae
 
@@ -170,7 +176,9 @@ class AETFPE(nn.Module):
             parts["latent"] = latent
             out = recon
         else:
-            out = fused
+            # self.fusion is None only when use_ae is True, and that branch is
+            # handled above, so self.fusion is always built here.
+            out = self.fusion(pe, tf) if tf is not None else pe
 
         return (out, parts) if return_parts else out
 
@@ -189,7 +197,11 @@ class AETFPE(nn.Module):
             "use_pe": self.cfg.use_pe,
             "use_tf": self.cfg.use_tf,
             "use_ae": self.cfg.use_ae,
-            "fusion": self.cfg.fusion if self.cfg.use_tf else "identity",
+            "fusion": (
+                "ae" if self.cfg.use_ae and self.cfg.use_tf
+                else self.cfg.fusion if self.cfg.use_tf
+                else "identity"
+            ),
             "legacy_lut": self.cfg.legacy_lut,
             "photometric": self.cfg.photometric or None,
             "classifier": self.cfg.classifier,

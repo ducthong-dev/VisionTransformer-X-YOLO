@@ -162,8 +162,9 @@ is set.
 0  environment
 1  dataset
 2A validation corruptions        <- the only corruption set that may inform a decision
-3  A0 baseline reproduction      [G3]
-3b V1 hyperparameter freeze
+2C CUDA architecture validation  [G1]
+3a V1 hyperparameter freeze
+3b A0 baseline reproduction      [G3]
 4  M1/M2/M3/A5 mechanism gate    [G4, G5]
 5  component ablation
 6  fusion ablation
@@ -179,30 +180,29 @@ is set.
 
 ```bash
 bash scripts/colab_setup.sh
-python -c "import torch;assert torch.cuda.is_available();print(torch.cuda.get_device_name(0))"
+python scripts/stage0_environment.py --require-cuda
 ```
-**Artifacts:** `configs/local.yaml`, printed GPU name and CUDA version.
-**Pass:** CUDA available; GPU name recorded (it goes into every complexity result).
-**Fail → STOP.** Everything downstream depends on it.
+**Artifacts:** `configs/local.yaml`; `${OUTPUT_ROOT}/environment/stage0_environment.json`
+with git commit, git dirty flag, GPU name, CUDA/cuDNN versions, PyTorch,
+Ultralytics, NumPy, Pillow, JPEG codec, zlib.
+**Pass:** `stage0_pass: true` in the JSON — requires `git_dirty: false` (the
+working tree must exactly match the `revision-protocol-v1` commit), CUDA
+available, and Pillow exactly `10.2.0`.
+**Fail → STOP.** A dirty repository at Stage 0 means later artifacts cannot be
+tied to a specific commit; everything downstream depends on this.
 
 ### Stage 1 — Dataset verification
 
 ```bash
-python - <<'PY'
-import sys, os; sys.path.insert(0,'src')
-from aetfpe.config import load_experiment
-from aetfpe.data import list_classes, dataset_fingerprint
-c = load_experiment('configs/_base.yaml')['data']
-for s in ('train','val','test'):
-    root = os.path.join(c['root'], c[f'{s}_split'])
-    fp = dataset_fingerprint(root, list_classes(os.path.join(c['root'], c['train_split'])))
-    print(s, fp['num_images'], fp['num_classes'], fp['listing_sha256'][:16])
-PY
+python scripts/verify_dataset.py
 ```
-**Artifacts:** per-split fingerprints.
-**Pass:** 38,584 / 8,340 / 8,335 across 39 classes. Anything else means the wrong
-dataset copy is mounted — the sibling paper's copy has 8,346 / 8,334 (see
-`IMPLEMENTATION_VALIDATION.md` §2.1).
+**Artifacts:** `${OUTPUT_ROOT}/dataset/dataset_manifest.csv` (one row per image)
+and `dataset_summary.json` (counts, per-class breakdown, manifest sha256,
+pass/fail against the frozen expectation).
+**Pass:** exactly 38,584 / 8,340 / 8,335 train/val/test across 39 classes.
+Anything else means the wrong dataset copy is mounted — the sibling ResCBAM
+paper's copy has 8,346 / 8,334 (`IMPLEMENTATION_VALIDATION.md` §2.1) — and the
+script exits non-zero in that case.
 **Fail → STOP.**
 
 ### Stage 2A — Validation corruptions (calibration set)
@@ -251,39 +251,93 @@ campaign log.
 > against the archived manifest. Matching pixel hashes restore the benchmark
 > exactly. The checksums, not the pixels, are the artifact that must survive.
 
-### Stage 3 — Baseline reproduction
+### Stage 2C — CUDA architecture validation (G1)
 
 ```bash
-python scripts/train.py --config configs/baseline_rgb.yaml
+python scripts/check_shapes.py --device cuda
 ```
-**Artifacts:** `${OUTPUT_ROOT}/ablation/A0_baseline_rgb/{checkpoint.pt,metrics.csv,train_summary.json,config.yaml,environment.json}`.
-**Pass:** **G3**.
-**Fail → STOP the campaign.**
+**Artifacts:** `${OUTPUT_ROOT}/validation/shape_report.json` — per-arm forward
+shapes, backward-pass completeness (every trainable parameter reaches a finite
+gradient), NaN/Inf checks, and parameter-count fidelity against the recovered
+historical value for every stock-YOLOv8n-cls arm.
+**Pass:** **16/16** arms report `OK`. Development runs on CPU/MPS are a sanity
+check only; this is the first run with `--device cuda`, which is what officially
+satisfies G1.
+**Fail → STOP.** Fix the implementation defect only — do not redesign the
+architecture. (One such defect was found and fixed during local development: a
+dead fusion module was built and called for AE arms despite its output always
+being discarded, which showed up exactly as a failed backward-pass check. See
+`IMPLEMENTATION_VALIDATION.md` §1.3a for the full account — corrected parameter
+counts for A5/D1 are already reflected everywhere.)
 
-### Stage 3b — Stage V1, freeze the AE hyperparameters
+### Stage 3a — Stage V1, freeze the AE hyperparameters
+
+Runs before G3: V1 exercises `A5_aetfpe_full`, which has no dependency on the
+plain-RGB baseline, and this is the order the frozen protocol specifies.
 
 ```bash
 # 20% training subset, FULL validation split -- the decision must be made on
-# complete validation data, so only the training side is limited.
-for w in 10 1; do
-  python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
-      --limit-train-per-class 200 --out "$OUTPUT_ROOT/validation/V1_w${w}_warm3" \
-      --override protocol.ae_loss_weight=$w
-done
+# complete validation data, so only the training side is limited. The three
+# runs are the ONLY permitted candidates (PROVENANCE_MATRIX.md Section 3b).
 python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
-    --limit-train-per-class 200 --out "$OUTPUT_ROOT/validation/V1_w10_warm0" \
-    --override protocol.ae_warmup_epochs=0
+    --limit-train-per-class 200 \
+    --out "$OUTPUT_ROOT/validation/V1a_w10_warm3"        # default _base.yaml values
+
+python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
+    --limit-train-per-class 200 --override protocol.ae_loss_weight=1 \
+    --out "$OUTPUT_ROOT/validation/V1b_w1_warm3"
+
+python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
+    --limit-train-per-class 200 --override protocol.ae_warmup_epochs=0 \
+    --out "$OUTPUT_ROOT/validation/V1c_w10_warm0"
+
+# optional but recommended: evaluate each candidate against corruptions_val so
+# select_v1.py can also report mean_corrupted_val_top1 (informational; it does
+# NOT enter the selection rule, which is validation top-1 only)
+for d in V1a_w10_warm3 V1b_w1_warm3 V1c_w10_warm0; do
+  python scripts/evaluate.py --run "$OUTPUT_ROOT/validation/$d" \
+      --corruption-root "$OUTPUT_ROOT/corruptions_val" --skip-corruptions=false
+done
+
+python scripts/select_v1.py \
+    --v1a "$OUTPUT_ROOT/validation/V1a_w10_warm3" \
+    --v1b "$OUTPUT_ROOT/validation/V1b_w1_warm3" \
+    --v1c "$OUTPUT_ROOT/validation/V1c_w10_warm0"
 ```
-**Artifacts:** three run directories under `validation/`.
-**Pass:** the pre-committed rule in `PROVENANCE_MATRIX.md` §2.2 selects one
-setting on **validation** top-1. Write the winner into `configs/_base.yaml` and
-do not revisit.
-**Fail → PAUSE.** If all three sit at chance, the AE design itself is wrong.
+**Artifacts:** three run directories under `validation/`;
+`${OUTPUT_ROOT}/v1/selection.json` with the selected candidate and the rule
+applied.
+**Pass:** `select_v1.py` applies the frozen rule mechanically — highest
+validation top-1; ties within 0.5 pp go to the simpler configuration. Write the
+selected `ae_loss_weight`/`ae_warmup_epochs` into `configs/_base.yaml` and do
+not revisit. `select_v1.py` refuses to run against any run whose recorded
+hyperparameters don't match one of the three frozen candidates, so a fourth
+candidate cannot be substituted by accident.
+**Fail → PAUSE.** If all three sit at chance, the AE design itself is broken —
+not a case for choosing a fourth candidate.
 
 > `--override` writes into the config **before** the protocol is built, so the
 > override string is saved verbatim in the run's `config.yaml` under `_overrides`
 > and in `environment.json`. A hyperparameter changed at the command line is
 > therefore part of the provenance record, not an invisible flag.
+
+### Stage 3b — G3: baseline reproduction
+
+```bash
+python scripts/train.py --config configs/baseline_rgb.yaml
+python scripts/check_g3_gate.py \
+    --run "$OUTPUT_ROOT/ablation/A0_baseline_rgb" \
+    --dataset-summary "$OUTPUT_ROOT/dataset/dataset_summary.json"
+```
+**Artifacts:** `${OUTPUT_ROOT}/ablation/A0_baseline_rgb/{checkpoint.pt,metrics.csv,train_summary.json,config.yaml,environment.json}`
+(A0's own run directory — this training run IS the G3 evidence; it is not
+duplicated into a second location) plus `${OUTPUT_ROOT}/g3/gate_result.json`
+with the PASS/CONDITIONAL/FAIL verdict, the deviation from the historical
+0.9969, and copies of the small provenance files (config, environment,
+metrics) alongside a reference to the checkpoint.
+**Pass:** **G3** — `check_g3_gate.py` exits 0 (PASS, ≥0.990), 1 (CONDITIONAL,
+0.980–0.990, requires disclosure before proceeding), or 2 (FAIL, <0.980).
+**Fail (exit 2) → STOP the campaign.**
 
 ### Stage 4 — Mechanism gate
 
@@ -417,15 +471,16 @@ everything in one session. Timings collected across GPUs are not comparable.
 
 | Gate | Failure stops the campaign? |
 |---|---|
-| Stage 0 CUDA | **Yes** |
+| Stage 0 environment | **Yes** |
 | Stage 1 dataset | **Yes** |
 | Stage 2A reproducibility + checksums | **Yes** |
-| Stage 2B / G2 checksums | **Yes** |
-| Stage 3 / G3 baseline | **Yes** |
-| Stage 3b V1 | No — pause and fix |
+| Stage 2C / G1 CUDA architecture | **Yes** |
+| Stage 3a V1 | No — pause and fix |
+| Stage 3b / G3 baseline | **Yes** |
 | Stage 4 / G4 sanity | No — pause and fix |
 | Stage 4 / G5 decision | Not a failure. It redirects the paper |
 | Stages 5–7 individual arms | No — pause that arm |
+| Stage 2B / G2 checksums | **Yes** |
 | Stage 8 manifest mismatch | **Yes**, until re-run |
 | Stages 9–10 | No |
 
@@ -436,18 +491,19 @@ everything in one session. Timings collected across GPUs are not comparable.
 | Stage | Runs | T4-hours |
 |---|---|---|
 | 2A validation corruptions | – | ~0.2 (CPU-bound) |
-| 2B test benchmark | – | ~1.5 (CPU-bound) |
-| 3 baseline | 1 | 2.0 |
-| 3b V1 hyperparameter freeze | 3 | ~1.0 |
+| 2C G1 CUDA validation | – | <0.1 |
+| 3a V1 hyperparameter freeze | 3 | ~1.0 |
+| 3b baseline (G3) | 1 | 2.0 |
 | 4 mechanism gate | 4 | 9.0 |
 | 5 component ablation | 4 | 9.2 |
 | 6 fusion ablation | 4 | 10.0 |
 | 7 external baselines | 3 | 13.0 |
+| 2B test benchmark | – | ~1.5 (CPU-bound) |
 | 8 final evaluation | – | ~4.0 |
 | 9–10 analyses | – | ~1.5 |
 | **Total, gate passes** | **19** | **≈ 51 h** |
 | **Total, G5 fails** | **11** | **≈ 32 h** |
 
 On an A100 or L4, roughly a third of those figures. Both fit inside the window to
-5 September 2026, provided Stage 3 starts promptly — the schedule risk is
+5 September 2026, provided Stage 3a starts promptly — the schedule risk is
 sequential gating, not raw compute.
