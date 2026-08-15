@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: A1_pe_only
+group: ablation
+description: "RGB + positional encoding, no transformer, no auto-encoder."
+model:
+  use_pe: true

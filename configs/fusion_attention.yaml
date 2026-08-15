@@ -1,0 +1,8 @@
+extends: _base.yaml
+name: F4_fusion_attention
+group: fusion
+description: "Lightweight SE-style channel-attention fusion, substituted for full cross-attention."
+model:
+  use_pe: true
+  use_tf: true
+  fusion: attention

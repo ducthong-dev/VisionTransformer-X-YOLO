@@ -1,0 +1,7 @@
+# Copy to configs/local.yaml (git-ignored) and set your machine's paths.
+# Environment variables of the same name always win over this file.
+env:
+  DATA_ROOT: "/absolute/path/to/Plant_leaf_diseases_dataset"
+  OUTPUT_ROOT: "results"
+  CACHE_ROOT: ".cache"
+  MODEL_ROOT: "weights"

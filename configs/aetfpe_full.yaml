@@ -1,0 +1,10 @@
+extends: _base.yaml
+name: A5_aetfpe_full
+group: ablation
+description: "Full AE-TFPE: PE + TF concatenated into the stacked sparse denoising AE. Reused as fusion arm F5."
+aliases: [F5_fusion_ae]
+model:
+  use_pe: true
+  use_tf: true
+  use_ae: true
+  fusion: linear

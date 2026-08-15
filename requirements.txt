@@ -1,29 +1,44 @@
-certifi==2024.2.2
-charset-normalizer==3.3.2
-filelock==3.13.1
-fsspec==2024.2.0
-huggingface-hub==0.20.3
-idna==3.6
-Jinja2==3.1.3
-joblib==1.3.2
-MarkupSafe==2.1.5
-mpmath==1.3.0
-networkx==3.2.1
-numpy==1.26.3
-packaging==23.2
+# AE-TFPE revision framework.
+#
+# Works on both target environments:
+#   LOCAL  macOS / Apple Silicon, CPU or MPS
+#   COLAB  Linux / NVIDIA CUDA
+#
+# torch is deliberately NOT pinned to a build here: Colab ships its own CUDA
+# build and pinning would force a multi-GB reinstall. Install torch from the
+# environment's own channel first, then this file.
+#
+# NOTE: numpy must stay < 2.0. numpy 2.x breaks the torch<->numpy bridge for
+# torch 2.2 builds ("Failed to initialize NumPy: _ARRAY_API not found").
+
+torch>=2.1
+torchvision>=0.16
+numpy>=1.23,<2.0
+
+# model + training
+ultralytics>=8.3
+transformers>=4.37
+timm>=0.9
+
+# data / imaging
+#
+# Pillow is PINNED, not floated. The `jpeg` corruption round-trips through
+# libjpeg, whose quantisation/DCT path differs between libjpeg-turbo builds, so
+# its *pixel output* is codec-dependent. Every other corruption is pure numpy and
+# is reproducible on any conforming build. Verify with:
+#     python scripts/verify_reproducibility.py --check
+# If that reports divergence only in the jpeg family, either match this pin or
+# drop the family -- do not ship a partially-divergent benchmark.
 pillow==10.2.0
-PyYAML==6.0.1
-regex==2023.12.25
-requests==2.31.0
-safetensors==0.4.2
-scikit-learn==1.4.0
-scipy==1.12.0
-sympy==1.12
-threadpoolctl==3.2.0
-tokenizers==0.15.1
-torch==2.2.0
-torchvision==0.17.0
-tqdm==4.66.1
-transformers==4.37.2
-typing_extensions==4.9.0
-urllib3==2.2.0
+opencv-python>=4.8,<4.11
+PyYAML>=6.0
+
+# metrics, analysis, figures
+scikit-learn>=1.3
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+thop>=0.1.1
+
+# optional: UMAP for latent visualisation (t-SNE fallback is used if absent)
+# umap-learn>=0.5

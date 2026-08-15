@@ -1,0 +1,8 @@
+extends: _base.yaml
+name: F2_fusion_concat
+group: fusion
+description: "Plain channel concatenation. NOTE: the only arm that modifies the classifier (6-channel stem)."
+model:
+  use_pe: true
+  use_tf: true
+  fusion: concat

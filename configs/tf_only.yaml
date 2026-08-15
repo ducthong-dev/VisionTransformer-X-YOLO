@@ -1,0 +1,7 @@
+extends: _base.yaml
+name: A2_tf_only
+group: ablation
+description: "RGB + transformer features, no positional encoding, no auto-encoder."
+model:
+  use_tf: true
+  fusion: linear

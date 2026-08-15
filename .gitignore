@@ -158,3 +158,33 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# ---- AE-TFPE revision framework ----
+# Local developer paths (absolute machine paths live here, never in committed configs)
+configs/local.yaml
+
+# Generated data and results
+data/
+dataset/
+results/
+.cache/
+weights/
+*.pt
+!yolov8n-cls.pt.placeholder
+
+# Recovered legacy artifacts kept outside version control
+evaluation-results/archived/**/*.jpg
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+instructions/
+
+# Serena MCP tool-local state (not project source)
+.serena/
+
+# Manuscript under active review -- this repo is public (Code Availability
+# statement), so the in-review PDF (with reviewer round content) must not be
+# pushed. Keep it local only.
+paper/

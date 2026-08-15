@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: B1_resnet50
+group: baseline
+description: "ResNet-50 under the identical frozen protocol."
+model:
+  classifier: resnet50

@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: M3_aug_control
+group: mechanism
+description: "Plain RGB trained with corruption augmentation. Controls the competing explanation that robustness comes from augmentation alone."
+train:
+  corruption_augmentation: true

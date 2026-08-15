@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: A4_rgb_ae
+group: ablation
+description: "Auto-encoder applied to plain RGB. Isolates the AE from the fusion."
+model:
+  use_ae: true

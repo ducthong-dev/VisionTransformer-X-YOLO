@@ -1,0 +1,64 @@
+# Frozen protocol shared by every arm. Do not override `protocol` in an arm
+# config unless the arm exists specifically to study that hyperparameter --
+# the fairness claim (Reviewer #10.7) depends on this file being the only
+# source of training settings.
+
+# Paths are environment variables, never absolute. Set DATA_ROOT (and optionally
+# OUTPUT_ROOT / CACHE_ROOT / MODEL_ROOT) or put them in a git-ignored
+# configs/local.yaml. See docs/RUNNING.md.
+#
+#   LOCAL   export DATA_ROOT="$HOME/.../dataset/Plant_leaf_diseases_dataset"
+#   COLAB   export DATA_ROOT=/content/data/Plant_leaf_diseases_dataset
+data:
+  root: "${DATA_ROOT}"
+  train_split: train
+  val_split: val
+  test_split: test
+  corruption_root: "${OUTPUT_ROOT}/corruptions"
+
+protocol:
+  img_size: 224
+  batch_size: 128
+  epochs: 30
+  optimizer: adamw
+  lr: 0.000714          # resolved value from log-org-280223, not the claimed 0.01
+  weight_decay: 0.001
+  warmup_epochs: 3.0
+  seed: 0
+  deterministic: true
+  checkpoint_selection: best_val_top1
+  num_workers: 4
+  ae_beta: 0.001
+  ae_rho: 0.05
+  # Reconstruction MSE (~0.04) and cross-entropy (~3.8) differ by two orders of
+  # magnitude at initialisation. Without reweighting, the AE gets almost no
+  # gradient pressure while the classifier cannot learn from an unreconstructed
+  # input -- the two deadlock. The weight below makes the terms comparable at the
+  # start of joint training. Chosen a priori from those magnitudes, NOT tuned on
+  # any test result.
+  ae_loss_weight: 10.0
+  # Classical stacked-autoencoder pretraining: reconstruction only, no
+  # classification gradient, for the first N epochs.
+  ae_warmup_epochs: 3
+
+model:
+  classifier: yolov8n-cls
+  num_classes: 39
+  pretrained: true
+  use_pe: false
+  use_tf: false
+  use_ae: false
+  fusion: identity
+  legacy_lut: false
+  photometric: ""
+  pe_gamma: 0.1
+  pe_type: sincos1d
+  vit_name: google/vit-base-patch16-224-in21k
+  vit_pretrained: true
+  vit_frozen: true
+  ae_latent_channels: 128
+  ae_sparse: true
+  ae_denoising: true
+
+train:
+  corruption_augmentation: false   # arm M3 only

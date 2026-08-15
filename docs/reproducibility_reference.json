@@ -1,0 +1,172 @@
+{
+  "environment": {
+    "python": "3.10.20",
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "machine": "arm64",
+    "numpy": "1.26.3",
+    "pillow": "10.2.0",
+    "zlib_runtime": "1.3.2",
+    "codec_jpeg": "6.2",
+    "codec_zlib": "1.3",
+    "rng": "numpy.random.Generator(PCG64), stream-stable per NumPy policy"
+  },
+  "image_probe": "synthetic, seed 0",
+  "results": {
+    "clean/none": {
+      "pixel_sha256": "bdc0f24ddc413923b174c525e48bfa13acdfd59d1b125f942aac1595ebfec279",
+      "mean": 153.776547,
+      "std": 70.802229,
+      "dependency": "numpy only"
+    },
+    "pepper/002": {
+      "pixel_sha256": "e2d1e8f0ad9eca3486bebe877dc6b88a00c62a25bdc0f2aabfcdbc5e31ad42a0",
+      "mean": 153.385071,
+      "std": 72.378354,
+      "dependency": "numpy only"
+    },
+    "pepper/010": {
+      "pixel_sha256": "d41db9c63b638d1f0849dfda7aacb43ed43d37acc81c61880dfec1e8a2e6ea96",
+      "mean": 151.282532,
+      "std": 78.708957,
+      "dependency": "numpy only"
+    },
+    "pepper/020": {
+      "pixel_sha256": "feb26f228f48f4dc9e4aad52bb9ac1fe023042ea8f234f92463823ca1a22920f",
+      "mean": 148.371366,
+      "std": 85.915491,
+      "dependency": "numpy only"
+    },
+    "pepper/030": {
+      "pixel_sha256": "1d2dfa02c66ef4e69f7f7235f0e0ac55ea98b7eaa369c4819940abfb84f8fe09",
+      "mean": 145.780214,
+      "std": 92.366303,
+      "dependency": "numpy only"
+    },
+    "pepper/040": {
+      "pixel_sha256": "2709ffd55dd0ce0ff52ef5333f17271d1e9c335960535d03593f2656f3a4224e",
+      "mean": 143.816333,
+      "std": 98.292455,
+      "dependency": "numpy only"
+    },
+    "pepper/050": {
+      "pixel_sha256": "7f756415b621de05ce59652e8a07defa3d2b61f9493c879cee8311fd3e1636e9",
+      "mean": 140.484973,
+      "std": 104.041725,
+      "dependency": "numpy only"
+    },
+    "transparency/70": {
+      "pixel_sha256": "b25e794abd64dc496638fd94ca43159124aa4603606e1c56c68dbdac2acb7124",
+      "mean": 153.365082,
+      "std": 70.525704,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/002": {
+      "pixel_sha256": "c238f7d34662ebb2d443a07db09ff0db9f95244c444b2f673362c6175ecf74ea",
+      "mean": 153.023477,
+      "std": 71.026264,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/010": {
+      "pixel_sha256": "959f08758b5ef550b07f1ff23bf095aeb02f841e557443afce0537791123c98e",
+      "mean": 151.694788,
+      "std": 73.038062,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/020": {
+      "pixel_sha256": "c028486b6c67befe10a150ba130af865454587404a8d8f3e27af3e43ef080acb",
+      "mean": 149.877186,
+      "std": 75.649125,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/030": {
+      "pixel_sha256": "82ef23561e640700cf59abf65caa9b6803eb6ea9bccfcfbddf59c0308bc5ca00",
+      "mean": 147.979738,
+      "std": 78.041859,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/040": {
+      "pixel_sha256": "9570f77f0dc7e0cfc29438191979d8b72bd71c288f453b02fb9e3704b14b1e62",
+      "mean": 145.568087,
+      "std": 80.237188,
+      "dependency": "numpy only"
+    },
+    "pepper_transparency/050": {
+      "pixel_sha256": "ef4106c22048d09eb6c1e762cfe25a74e11699a69ed65b09829420022067e0df",
+      "mean": 144.146013,
+      "std": 82.253541,
+      "dependency": "numpy only"
+    },
+    "gaussian_noise/easy": {
+      "pixel_sha256": "5ddfa816b414fc0bbb69f61f1113c142a2fe750b6a868ad2ed937778aad6d472",
+      "mean": 152.903646,
+      "std": 70.891891,
+      "dependency": "numpy only"
+    },
+    "gaussian_noise/medium": {
+      "pixel_sha256": "efce03ea98848f0fba303938cd7eb2af496063be65dc3f99ba548114db5c328b",
+      "mean": 151.890319,
+      "std": 72.408087,
+      "dependency": "numpy only"
+    },
+    "gaussian_noise/hard": {
+      "pixel_sha256": "c203e80ddfce0b70c7673d6df388ab637fbc50651e1b8e1a3c50ebaf6bb15843",
+      "mean": 150.0019,
+      "std": 77.450455,
+      "dependency": "numpy only"
+    },
+    "gaussian_blur/easy": {
+      "pixel_sha256": "3dfe9b4ae4619286d80099167d81560af196cec10778298d95a8fb8502e21c2c",
+      "mean": 153.776387,
+      "std": 69.714172,
+      "dependency": "numpy only"
+    },
+    "gaussian_blur/medium": {
+      "pixel_sha256": "742861493719a59ac0838848154c40d01faeaa578cf7af67a5cd143ef5387e0c",
+      "mean": 153.778633,
+      "std": 69.30819,
+      "dependency": "numpy only"
+    },
+    "gaussian_blur/hard": {
+      "pixel_sha256": "6acc7867ba380368c467f05addef418014ffebdcfa1a544fe89d9278bdc36153",
+      "mean": 153.770681,
+      "std": 68.578303,
+      "dependency": "numpy only"
+    },
+    "brightness/easy": {
+      "pixel_sha256": "50380f81e8e62fbec9d0fa72825528a676087015677156a3d8bb6580c6f38dac",
+      "mean": 107.218856,
+      "std": 49.597756,
+      "dependency": "numpy only"
+    },
+    "brightness/medium": {
+      "pixel_sha256": "d1f4ded4cf83ef2143cebb9744c5409a692e2ae6aab6e6ad1284b808ec49e332",
+      "mean": 76.640094,
+      "std": 35.405079,
+      "dependency": "numpy only"
+    },
+    "brightness/hard": {
+      "pixel_sha256": "eb35da4a79901186a8fc14e4e617f8ec94f173997e79ffa5ecc1845e2ab369fe",
+      "mean": 45.708088,
+      "std": 21.2782,
+      "dependency": "numpy only"
+    },
+    "jpeg/easy": {
+      "pixel_sha256": "6349ebacde643099a0609638910287505082f207148ac706eeaa2aed201e6864",
+      "mean": 153.859608,
+      "std": 70.228989,
+      "dependency": "LIBJPEG-DEPENDENT"
+    },
+    "jpeg/medium": {
+      "pixel_sha256": "3629132529ee4645b4c6e03613a277e128311ef6b402cc9167f3db4381717542",
+      "mean": 153.519731,
+      "std": 69.923136,
+      "dependency": "LIBJPEG-DEPENDENT"
+    },
+    "jpeg/hard": {
+      "pixel_sha256": "e6c57687ccba58e44150a4ea60efece4703ccd85799cc190b1a47768efc9b910",
+      "mean": 153.657771,
+      "std": 69.722396,
+      "dependency": "LIBJPEG-DEPENDENT"
+    }
+  }
+}

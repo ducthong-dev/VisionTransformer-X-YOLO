@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: B2_efficientnet_b0
+group: baseline
+description: "EfficientNet-B0 under the identical frozen protocol."
+model:
+  classifier: efficientnet_b0

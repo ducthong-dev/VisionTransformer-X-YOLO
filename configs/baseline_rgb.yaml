@@ -1,0 +1,4 @@
+extends: _base.yaml
+name: A0_baseline_rgb
+group: ablation
+description: "RGB baseline. Stock YOLOv8n-cls, no front-end. Reference arm."

@@ -1,0 +1,69 @@
+# Frozen corruption benchmark.
+#
+# These parameters were fixed BEFORE any model was evaluated and must not be
+# retuned after seeing results. The corrupted test sets are generated once by
+# scripts/generate_corruptions.py and reused, byte-identical, by every model.
+#
+# Legacy families (pepper, transparency, pepper_transparency) reproduce the
+# manuscript's Type 1-3 at the six ratios reported in Tables 2-3. Their exact
+# historical definitions are NOT recoverable (see docs/ARCHITECTURE_RECOVERY.md,
+# goal 8); the values here are documented reconstructions.
+#
+# New families follow Reviewer #11's request. Severities are easy / medium / hard
+# and were chosen so that "hard" degrades a stock YOLOv8n-cls substantially
+# without saturating at chance (1/39 = 2.6%).
+
+seed: 0
+image_size: 224
+split: test              # corruptions are applied ONLY to the held-out test split
+
+corruptions:
+
+  # ---- Legacy Type 1: soft pepper / salt-and-pepper -------------------------
+  # `ratio` = fraction of pixels replaced. salt_vs_pepper=0.5 means half the
+  # replaced pixels go white, half black. Set salt_vs_pepper: 0.0 for the
+  # pepper-only reading of S4.6.
+  pepper:
+    "002": {ratio: 0.02, salt_vs_pepper: 0.5, per_channel: false}
+    "010": {ratio: 0.10, salt_vs_pepper: 0.5, per_channel: false}
+    "020": {ratio: 0.20, salt_vs_pepper: 0.5, per_channel: false}
+    "030": {ratio: 0.30, salt_vs_pepper: 0.5, per_channel: false}
+    "040": {ratio: 0.40, salt_vs_pepper: 0.5, per_channel: false}
+    "050": {ratio: 0.50, salt_vs_pepper: 0.5, per_channel: false}
+
+  # ---- Legacy Type 2: 70% transparency overlay -----------------------------
+  # I_out = alpha * I_labelled + (1 - alpha) * I_distractor, distractor drawn
+  # deterministically from a DIFFERENT class in the same split.
+  transparency:
+    "70": {alpha: 0.7}
+
+  # ---- Legacy Type 3: pepper then transparency -----------------------------
+  # Noise applied to the labelled image first, then composited (S4.3.3 order).
+  pepper_transparency:
+    "002": {ratio: 0.02, alpha: 0.7, salt_vs_pepper: 0.5}
+    "010": {ratio: 0.10, alpha: 0.7, salt_vs_pepper: 0.5}
+    "020": {ratio: 0.20, alpha: 0.7, salt_vs_pepper: 0.5}
+    "030": {ratio: 0.30, alpha: 0.7, salt_vs_pepper: 0.5}
+    "040": {ratio: 0.40, alpha: 0.7, salt_vs_pepper: 0.5}
+    "050": {ratio: 0.50, alpha: 0.7, salt_vs_pepper: 0.5}
+
+  # ---- New benchmark (Reviewer #11) ----------------------------------------
+  gaussian_noise:            # sigma in 0-255 units
+    easy:   {sigma: 10}
+    medium: {sigma: 25}
+    hard:   {sigma: 50}
+
+  gaussian_blur:             # PIL GaussianBlur radius, in pixels at 224x224
+    easy:   {sigma: 1.0}
+    medium: {sigma: 2.0}
+    hard:   {sigma: 4.0}
+
+  brightness:                # multiplicative; < 1 darkens
+    easy:   {factor: 0.7}
+    medium: {factor: 0.5}
+    hard:   {factor: 0.3}
+
+  jpeg:                      # libjpeg quality
+    easy:   {quality: 40}
+    medium: {quality: 20}
+    hard:   {quality: 10}

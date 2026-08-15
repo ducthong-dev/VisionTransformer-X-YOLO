@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: M1_legacy_lut
+group: mechanism
+description: "Byte-exact reproduction of the historical transform (0.2*LUT + 0.8*RGB). The incumbent behind every published number."
+model:
+  legacy_lut: true

@@ -1,0 +1,24 @@
+extends: _base.yaml
+name: D1_ae_standard
+group: fusion
+description: >
+  AE fusion trained clean-input -> clean-target (standard, non-denoising, still
+  sparse). This is the arm that belongs in the FUSION table, not A5.
+
+  Rationale: A5 uses a denoising objective, so its auto-encoder sees synthetic
+  noise during training while F1/F2/F4 do not. Comparing A5 against those arms
+  would attribute to "AE fusion" a gain that partly comes from noise exposure.
+  D1 removes that confound: it has the same architecture and the same clean
+  training data as every conventional fusion operator, so D1 vs F1/F2/F3/F4 is a
+  like-for-like test of the auto-encoder AS A FUSION MECHANISM.
+
+  Paired with A5 it also isolates the denoising objective itself (A5 - D1), which
+  is the specific claim Reviewer #10.4 challenges.
+aliases: [F5_fusion_ae_clean]
+model:
+  use_pe: true
+  use_tf: true
+  use_ae: true
+  fusion: linear
+  ae_denoising: false     # clean input, clean target
+  ae_sparse: true         # KL sparsity retained, so only the denoising term differs from A5

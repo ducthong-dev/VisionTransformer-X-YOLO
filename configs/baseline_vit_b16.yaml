@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: B3_vit_b16
+group: baseline
+description: "ViT-B/16 under the identical frozen protocol."
+model:
+  classifier: vit_b_16

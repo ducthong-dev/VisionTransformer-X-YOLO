@@ -1,0 +1,6 @@
+extends: _base.yaml
+name: M2_photometric
+group: mechanism
+description: "Monotonic gamma control matched to the legacy LUT in deviation but without its wrap discontinuities."
+model:
+  photometric: "gamma:1.6"
