@@ -1,5 +1,10 @@
 # Architecture v2 — Spatial Resolution Trade-off
 
+> **FRAMING UPDATED 16 Aug 2026 — see `MAJOR_REVISION_TWO_METHOD_STRATEGY.md`.**
+> C2-28 is the **leading Efficient AE-TFPE candidate**, NOT a replacement for
+> Original AE-TFPE. Original AE-TFPE (C0) is retained in the run matrix as the
+> reference proposed architecture. C2-7's G4 is no longer a gate on C2-28.
+
 **Date:** 16 August 2026 · **Status:** measurement only. Nothing trained, nothing re-frozen.
 **Frozen v1 untouched:** `check_shapes.py` 16/16, A5/D1 still 87,549,123 params, no `configs/` file modified.
 
@@ -384,12 +389,8 @@ this measurement and is the reason Option B stays live as the fallback.
 ```
 Run Stage 1 (T4) and Stage 2 (G4 on C2-7)
 ├─ C2-28 latency > 5x baseline ............... hard reject -> Option B
-├─ C2-28 latency <= 5x
-│  ├─ C2-7 G4 FAIL ........................... adopt C2-28 (7x7 shown inadequate)
-│  └─ C2-7 G4 PASS ........................... C2-28 still preferred for the
-│                                              robustness claim; decide with the
-│                                              co-authors whether clean-accuracy
-│                                              parity justifies 1.6x fewer FLOPs
+├─ C2-28 latency <= 5x ....................... run the C2-28 clean sanity
+│                                              experiment (independent of C2-7)
 └─ Any candidate needs tuning to pass ........ do not tune -> Option B
 ```
 

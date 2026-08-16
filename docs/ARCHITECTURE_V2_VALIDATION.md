@@ -1,5 +1,11 @@
 # Architecture v2 — C2 Validation
 
+> **FRAMING UPDATED 16 Aug 2026 — see `MAJOR_REVISION_TWO_METHOD_STRATEGY.md`.**
+> C2 variants are **Efficient AE-TFPE candidates**, evaluated independently of
+> Original AE-TFPE (C0), which is retained as the reference method. Nothing here
+> replaces Original AE-TFPE. Per the strategy update, **C2-7's G4 is no longer a
+> gate on C2-28** — the variants are independent candidates.
+
 **Date:** 16 August 2026 · **Candidate:** C2 = MobileViT-XXS + slim feature-space AE + unmodified YOLOv8n-cls
 **Status:** C2-1 **not executed** (no CUDA on this machine) · C2-2 **executed** · C2-3 **blocked by the C2-1 gate**
 **Verdict:** **CONDITIONAL FAIL — do not adopt C2 as specified.** See §7.

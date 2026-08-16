@@ -1,5 +1,14 @@
 # Architecture v2 — Inference Complexity Benchmark
 
+> **FRAMING UPDATED 16 Aug 2026 — read `MAJOR_REVISION_TWO_METHOD_STRATEGY.md` first.**
+> The revision now presents **two methods**, not a replacement. **C0 is Original
+> AE-TFPE**, the reference proposed architecture; it is **retained in the run
+> matrix** and is **not** rejected as a method. The "HARD REJECT" verdicts below
+> were reached under a *replacement-selection* rule set that no longer applies —
+> they now read as: C0's cost is an **RQ4 finding**, and C0/C1 are not viable
+> **Efficient AE-TFPE** candidates. C2-28 is the **leading Efficient AE-TFPE
+> candidate**, not a replacement architecture, and is not adopted.
+
 **Date:** 16 August 2026 · **Status:** benchmark only. No training, no protocol re-freeze.
 **Command:** `scripts/benchmark_architectures.py` · **Raw output:** `${OUTPUT_ROOT}/architecture_v2/benchmark.json`
 
@@ -20,8 +29,8 @@ frozen decision rule, the recommendation is C2** — subject to one serious risk
 | | Params | × base | GFLOPs | × base | Verdict on cost |
 |---|---|---|---|---|---|
 | **BASELINE** YOLOv8n-cls | 1,488,247 | 1.00× | 0.4116 | 1.00× | reference |
-| **C0** ViT-B/16 + image AE | 87,549,123 | 58.83× | 36.2215 | **88.00×** | **HARD REJECT** |
-| **C1** MobileViT-XXS + image AE | 2,700,147 | 1.81× | 3.0087 | **7.31×** | **HARD REJECT** |
+| **C0 = Original AE-TFPE** | 87,549,123 | 58.83× | 36.2215 | **88.00×** | reference method; cost is an RQ4 finding |
+| **C1** MobileViT-XXS + image AE | 2,700,147 | 1.81× | 3.0087 | **7.31×** | not viable as an Efficient candidate |
 | **C2** MobileViT-XXS + slim feature AE | 2,545,603 | 1.71× | 1.1279 | **2.74×** | **meets preferred** |
 | **C3** EfficientViT-B0 + slim feature AE | 2,264,323 | 1.52× | 0.8055 | **1.96×** | **meets preferred** |
 
