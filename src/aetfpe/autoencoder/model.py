@@ -187,12 +187,59 @@ class SlimFeatureSpaceAE(nn.Module):
     def latent_dim(self) -> int:
         return self.latent_channels * self.grid * self.grid
 
+    # ------------------------------------------------------------------ #
+    # Metadata only. Nothing below is called by forward(); these helpers read
+    # the built modules and never modify them.
+    # ------------------------------------------------------------------ #
+
+    def _decoder_transposed_convs(self) -> list[nn.ConvTranspose2d]:
+        """Every transposed convolution in the decoder, in execution order.
+
+        Walks the actual modules rather than counting entries in the Sequential:
+        `self.decoder` holds `len(decoder_widths)` `_up_block` wrappers plus a bare
+        ConvTranspose2d plus a Sigmoid, so `len(self.decoder) // 2` bears no
+        relation to the number of upsampling stages. That expression previously
+        reported 3/2/2 stages for C2-7/C2-14/C2-28, whose real depths are 5/4/3.
+        """
+        return [m for m in self.decoder.modules() if isinstance(m, nn.ConvTranspose2d)]
+
+    def decoder_spatial_path(self) -> list[int]:
+        """Spatial size after each decoder stage, e.g. [28, 56, 112, 224].
+
+        Derived from each module's own kernel, stride, padding, dilation and
+        output padding via the transposed-convolution output formula, so a change
+        to any of them is reflected here instead of being assumed.
+        """
+        sizes = [self.grid]
+        for m in self._decoder_transposed_convs():
+            k, s = m.kernel_size[0], m.stride[0]
+            p, d, op = m.padding[0], m.dilation[0], m.output_padding[0]
+            sizes.append((sizes[-1] - 1) * s - 2 * p + d * (k - 1) + op + 1)
+        return sizes
+
+    def _decoder_summary(self) -> str:
+        convs = self._decoder_transposed_convs()
+        specs = {(m.kernel_size[0], m.stride[0], m.padding[0]) for m in convs}
+        if len(specs) == 1:
+            k, s, p = specs.pop()
+            spec = f"ConvTranspose2d(k={k}, s={s}, p={p})"
+        else:
+            spec = " then ".join(
+                f"ConvTranspose2d(k={m.kernel_size[0]}, s={m.stride[0]}, p={m.padding[0]})"
+                for m in convs)
+        path = " -> ".join(str(v) for v in self.decoder_spatial_path())
+        return f"{len(convs)} x {spec}; {path}"
+
     def describe(self) -> dict:
+        path = self.decoder_spatial_path()
         return {
             "type": "slim feature-space sparse denoising auto-encoder",
             "in_channels": self.in_channels,
             "encoder": f"Conv1x1 -> BN -> Sigmoid at {self.grid}x{self.grid} (no spatial reduction)",
-            "decoder": f"{len(self.decoder) // 2} x [ConvT4x4 s2], {self.grid} -> {self.out_size}",
+            "decoder": self._decoder_summary(),
+            "decoder_stages": len(self._decoder_transposed_convs()),
+            "decoder_spatial_path": path,
+            "decoder_output_size": path[-1],
             "latent_shape": [self.latent_channels, self.grid, self.grid],
             "latent_dim": self.latent_dim(),
             "latent_activation": "sigmoid",
