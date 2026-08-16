@@ -13,6 +13,11 @@ Benchmark protocol, identical for every candidate including the baseline:
     torch.cuda.synchronize() around every timed region
     AMP setting identical across candidates (default: off, matching training)
 
+Every candidate's parameters and buffers are verified to be on the requested
+device before shapes are traced, before the warm-up, and before peak-memory
+measurement; the audit is recorded per candidate under `device_audit`.
+See scripts/test_device_placement.py for the regression test.
+
 Parameters, FLOPs/MACs and tensor shapes are hardware-independent and are valid
 from any device. Latency, throughput and peak memory are CUDA-only: on a non-CUDA
 device they are recorded but stamped `timings_reportable: false`, per
@@ -32,7 +37,9 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from aetfpe.complexity import count_flops, count_parameters, hardware_info, model_size_mb  # noqa: E402
+from aetfpe.complexity import (  # noqa: E402
+    assert_model_on_device, count_flops, count_parameters, hardware_info, model_size_mb,
+)
 from aetfpe.config import environment_info, pick_device, resolve_roots  # noqa: E402
 from aetfpe.models import build_model  # noqa: E402
 from aetfpe.seeding import seed_everything  # noqa: E402
@@ -95,6 +102,9 @@ def sync(device: str) -> None:
 
 @torch.no_grad()
 def measure_latency(model, device, batch_size, img_size, warmup, iters, amp):
+    # Checked before the warm-up, so a model that is not fully on `device` can
+    # never be warmed up or timed. Outside the timed region; protocol unchanged.
+    assert_model_on_device(model, device, f"latency bs={batch_size}, before warm-up")
     x = torch.randn(batch_size, 3, img_size, img_size, device=device)
     autocast = (
         torch.autocast(device_type="cuda", dtype=torch.float16)
@@ -133,6 +143,7 @@ def measure_latency(model, device, batch_size, img_size, warmup, iters, amp):
 def peak_memory(model, device, batch_size, img_size):
     if not device.startswith("cuda"):
         return None
+    assert_model_on_device(model, device, f"peak memory bs={batch_size}")
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
     x = torch.randn(batch_size, 3, img_size, img_size, device=device)
@@ -165,6 +176,7 @@ def interface_description(model) -> dict:
 
 @torch.no_grad()
 def trace_shapes(model, device, img_size) -> dict:
+    assert_model_on_device(model, device, "trace_shapes")
     # rand, not randn: the dataloader delivers images in [0, 1], and the reported
     # classifier-input range is only meaningful in that domain. (Latency below
     # uses randn, which is fine -- timing does not depend on the input's range.)
@@ -218,6 +230,7 @@ def main() -> int:
         cfg["vit_pretrained"] = bool(args.pretrained)
 
         model = build_model(cfg).to(device).eval()
+        assert_model_on_device(model, device, f"{key}: immediately after build")
 
         row = {"candidate": key, "label": spec["label"], "config": spec["model"]}
         row.update(count_parameters(model))
@@ -226,6 +239,15 @@ def main() -> int:
         row.update(count_flops(model, (1, 3, args.img_size, args.img_size), device="cpu"))
         row["gflops"] = round(row.get("gflops", float("nan")), 4)
         row["macs_g"] = round(row.get("macs", float("nan")) / 1e9, 4)
+
+        # FLOPs are profiled on CPU (hardware-independent, protocol unchanged) and
+        # nn.Module.to() is in-place. count_flops now restores the device itself;
+        # this re-assertion is deliberate belt-and-braces so no future profiling
+        # step can strand the model off-device before it is measured.
+        model.to(device).eval()
+        row["device_audit"] = assert_model_on_device(
+            model, device, f"{key}: before trace_shapes")
+
         row["shapes"] = trace_shapes(model, device, args.img_size)
         row["interface"] = interface_description(model)
 
