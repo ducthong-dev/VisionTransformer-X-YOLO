@@ -7,6 +7,14 @@ Evidence labels used throughout — **[MEASURED]** on real data/code · **[RECOV
 historical artifact · **[RECONSTRUCTED]** rebuilt because the original is unavailable · **[DERIVED]**
 arithmetic from measurements · **[HYPOTHESIS]** reasoned but unverified · **[NOT YET TESTED]**.
 
+> **Update 16 Aug 2026 — the T4 benchmark has been executed (§3).** Four defects
+> found afterwards are recorded in **`PROTOCOL_AMENDMENT_2026-08-16.md`**, and the
+> decoder trace in **`DECODER_PATH_AUDIT.md`**. Read the amendment before quoting
+> any FLOPs figure or any `verdict` field: the benchmark's latency criterion is
+> currently order-dependent, and `thop` over-counts transposed convolutions by 4×.
+> **C2-28 is a CONDITIONAL CANDIDATE, not yet validated, and not to be called
+> "efficient" on cost evidence alone** (§3.3).
+
 ---
 
 ## 0. The revised scientific narrative
@@ -151,44 +159,99 @@ M1/M2/M3, or a positive RQ1 result cannot be attributed to the method.
 
 ---
 
-## 3. Task 3 — T4 benchmark · **NOT EXECUTED**
+## 3. Task 3 — T4 benchmark · **EXECUTED 16 Aug 2026**
 
-`torch.cuda.is_available() == False` on this machine (macOS, arm64, torch 2.2.0
-built without CUDA). Per *"Do not estimate missing CUDA measurements"*, latency,
-throughput and peak GPU memory are **absent, not estimated**.
+Tesla T4, all five models in one process on one GPU, batch 1 and 32, 50 warm-up,
+200 timed iterations, one AMP policy. Full results and the two commissioned audits
+are in `ARCHITECTURE_V2_BENCHMARK.md` §8 and `PROTOCOL_AMENDMENT_2026-08-16.md`.
 
-```bash
-# COLAB / Tesla T4 -- all five models, one session, identical conditions
-python scripts/benchmark_architectures.py --device cuda --pretrained \
-    --only BASELINE C0 C2 C2-14 C2-28
-```
+| Model | Params | ×base | GFLOPs *(corrected)* | ×base | **BS1 latency** | ×base | BS32/img | ×base |
+|---|---|---|---|---|---|---|---|---|
+| YOLOv8n-cls baseline | 1,488,247 | 1.00× | 0.4116 | 1.00× | **3.3632 ms** | 1.000 | 0.22906 ms | 1.000 |
+| **Original AE-TFPE (C0)** | 87,549,123 | 58.83× | 34.8728 | 84.73× | 28.5088 ms | 8.477 | 10.7734 ms | 47.033 |
+| C2-7 | 2,545,603 | 1.71× | 0.9786 | 2.378× | 27.0000 ms | 8.028 | 1.2318 ms | 5.378 |
+| C2-14 | 2,067,091 | 1.39× | 1.0043 | 2.440× | 16.3708 ms | 4.868 | 1.2260 ms | 5.352 |
+| **C2-28 (leading Efficient candidate)** | 1,716,739 | **1.15×** | 1.0123 | 2.459× | **10.2045 ms** | **3.034** | 1.2908 ms | 5.635 |
 
-Harness implements exactly: batch 1 and 32 · 50 warm-up · 200 timed ·
-`torch.cuda.synchronize()` around every timed region · one AMP policy for all.
-Writes `latency_ms_mean/std/median`, `throughput_img_per_s`, `peak_gpu_mem_mb`.
+GFLOPs are the **corrected** values; as-reported `thop` figures are 88.00× /
+2.74× / 3.38× / 4.43× and are inflated by a transposed-convolution over-count
+(amendment §A2). Peak CUDA memory is in §3.1/§3.2.
 
-**[MEASURED]** and hardware-independent, already final:
+⚠ **Batch-1 latency carries 15–30 % relative standard deviation.** C2-28 is
+3.034× on the mean and **2.923× on the median** — the two straddle the 3×
+threshold, and the rule does not say which statistic applies (amendment §A5).
+Batch-32 timings are tight (0.9–2.7 %).
 
-| Model | Params | ×base | Trainable | GFLOPs | ×base |
-|---|---|---|---|---|---|
-| YOLOv8n-cls baseline | 1,488,247 | 1.00× | 1,488,247 | 0.4116 | 1.00× |
-| **Original AE-TFPE (C0)** | 87,549,123 | 58.83× | 1,750,467 | 36.2215 | 88.00× |
-| C2-7 | 2,545,603 | 1.71× | 1,594,579 | 1.1279 | 2.74× |
-| C2-14 | 2,067,091 | 1.39× | 1,575,747 | 1.3896 | 3.38× |
-| **C2-28 (leading Efficient candidate)** | 1,716,739 | **1.15×** | 1,567,219 | 1.8215 | 4.43× |
+**FLOPs mis-rank these architectures.** C2-7 has the fewest FLOPs and is 2.6×
+slower than C2-28 at batch 1. Selection on FLOPs alone would have picked the
+slowest viable candidate.
 
-**[NOT YET TESTED]** latency b=1, latency b=32, throughput, peak GPU memory — for all five.
+### 3.1 Original AE-TFPE → Efficient AE-TFPE (C2-28) — **[DERIVED]** from the T4 run
 
-Latency bands apply to **Efficient AE-TFPE only** (Original AE-TFPE's cost is a
-finding under RQ4, not a disqualification): ≤3× preferred · 3–5× acceptable only
-with demonstrated robustness/information benefit · >5× requires reconsideration.
+The two-method comparison the revision is built on:
+
+| Quantity | Original AE-TFPE | Efficient AE-TFPE (C2-28) | Reduction | Factor |
+|---|---|---|---|---|
+| Parameters | 87,549,123 | 1,716,739 | **−98.04 %** | **51.0×** |
+| GFLOPs *(corrected)* | 34.8728 | 1.0123 | **−97.10 %** | **34.5×** |
+| GFLOPs *(as reported)* | 36.2215 | 1.8215 | −94.97 % | 19.9× |
+| Model size (fp32) | 334.576 MB | 7.156 MB | **−97.86 %** | **46.8×** |
+| **BS1 latency** | 28.5088 ms | 10.2045 ms | **−64.21 %** | **2.79×** |
+| BS32 per-image | 10.7734 ms | 1.2908 ms | −88.02 % | 8.35× |
+| BS32 throughput | 92.82 img/s | 774.78 img/s | **+734.7 %** | **8.35×** |
+| Peak CUDA memory, BS1 | 378.12 MiB | 65.21 MiB | **−82.75 %** | **5.80×** |
+| Peak CUDA memory, BS32 | 646.25 MiB | 287.75 MiB | **−55.47 %** | **2.25×** |
+
+### 3.2 Efficient AE-TFPE (C2-28) versus YOLOv8n-cls — the overhead that remains
+
+| Quantity | YOLOv8n-cls | C2-28 | Overhead |
+|---|---|---|---|
+| Parameters | 1,488,247 | 1,716,739 | **+15.4 %** (1.154×) |
+| GFLOPs *(corrected)* | 0.4116 | 1.0123 | **+145.9 %** (2.459×) |
+| GFLOPs *(as reported)* | 0.4116 | 1.8215 | +342.5 % (4.425×) |
+| Model size (fp32) | 5.703 MB | 7.156 MB | +25.5 % (1.255×) |
+| **BS1 latency** | 3.3632 ms | 10.2045 ms | **+203.4 %** (3.034×) |
+| BS32 per-image | 0.22906 ms | 1.2908 ms | **+463.5 %** (5.635×) |
+| BS32 throughput | 4365.58 img/s | 774.78 img/s | **−82.3 %** |
+| Peak CUDA memory, BS1 | 41.61 MiB | 65.21 MiB | **+56.7 %** (1.567×) |
+| Peak CUDA memory, BS32 | 130.61 MiB | 287.75 MiB | **+120.3 %** (2.203×) |
+
+### 3.3 Required interpretation — binding on the manuscript
+
+> **Efficient AE-TFPE substantially reduces the computational burden of Original
+> AE-TFPE, but still incurs meaningful overhead over YOLOv8n-cls.**
+
+**Forbidden phrasings:** "negligible overhead", "baseline-equivalent efficiency",
+or any wording implying C2-28 is free relative to the classifier. Both are
+contradicted by 3.034× BS1 latency and 5.635× BS32 per-image cost.
+
+C2-28 is a **CONDITIONAL CANDIDATE, not yet validated**: parameters preferred,
+FLOPs conditional on amendment §A2, BS1 latency conditional and only just above
+the 3× band, BS32 throughput a substantial overhead. **No C2-28 model has been
+trained**, so nothing is yet known about its accuracy or robustness. It must not
+be called "efficient" on the strength of a cost benchmark alone.
+
+### 3.4 Latency bands
+
+Bands apply to **Efficient AE-TFPE only** (Original AE-TFPE's cost is a finding
+under RQ4, not a disqualification): ≤3× preferred · 3–5× acceptable only with
+demonstrated robustness/information benefit · >5× requires reconsideration.
+
+At **3.034× BS1**, C2-28 sits in the *acceptable-only-with-demonstrated-benefit*
+band by a margin of 0.034×. That benefit is exactly what remains unproven, and
+what E5/E3 must establish. Under the pre-amendment reading — BS32 as the
+criterion — C2-28 would sit at 5.635× and fall in the *requires reconsideration*
+band; see amendment §A1.5, where this is stated openly as the amendment's effect.
 
 ---
 
-## 4. Task 4 — C2-28 clean sanity experiment · **NOT EXECUTED**
+## 4. Task 4 — C2-28 clean sanity experiment · **PREPARED, NOT EXECUTED**
 
-Requires full-split training; your standing environment constraint reserves that
-for Colab. Pre-registered here in full so the run is interpretable whenever it happens.
+Cleared to run: both post-benchmark audits found **no defect that changes what
+C2-28 computes**. The four items in `PROTOCOL_AMENDMENT_2026-08-16.md` concern a
+decision rule, a FLOPs convention, a metadata string and 153 never-executed
+parameters — none of which affects whether the 28×28 representation is learnable,
+which is the only question this run asks. Execution awaits your go-ahead.
 
 ```bash
 # COLAB -- ONE run. Validation only. No test, no corruptions_test.
@@ -197,20 +260,27 @@ python scripts/train.py --config configs/aetfpe_full.yaml \
     --override model.ae_space=feature \
     --override model.tf_stage=2 \
     --out "$OUTPUT_ROOT/validation/C2_28_clean_sanity"
-
-python scripts/evaluate_calibration.py \
-    --run "$OUTPUT_ROOT/validation/C2_28_clean_sanity" \
-    --corruption-root "$OUTPUT_ROOT/corruptions_val"
 ```
+
+Clean validation only, so **no corruption set is required** and none is generated.
+The `evaluate_calibration.py` step previously listed here is **not** part of this
+run; it needs `corruptions_val`, which is out of scope.
 
 **Objective, pre-registered:** *can C2-28 learn the 39-class problem without
 catastrophic information loss?* Not superiority. Not adoption.
 
-**Recorded automatically:** per-epoch training curve, validation top-1 and top-5,
-convergence behaviour, AE reconstruction and KL loss, wall-clock, and device — all
-already emitted by `train.py` into `metrics.csv` / `train_summary.json`.
-Peak GPU memory is **not** currently logged by `train.py`; it is available from the
-Task-3 benchmark instead.
+**Recorded automatically:** per-epoch training curve, validation top-1 **and
+top-5**, convergence behaviour, AE reconstruction and KL loss, wall-clock, device,
+and — since commit `da9d1ba` — **peak CUDA allocated/reserved memory**, reset
+immediately before the first training step and written to `train_summary.json`
+under `peak_memory`. The note that `train.py` does not log peak memory is
+superseded.
+
+**Verdict bands, pre-registered and not to be revised after seeing the result:**
+≥ 0.95 learnable · 0.80–0.95 degraded, report and do **not** tune · < 0.80
+catastrophic, stop and report. Diagnostic attribution: a flat or rising AE
+reconstruction loss implicates the decoder; a falling one with stagnant accuracy
+implicates the grid/interface. Full readout cells in `COLAB_EXECUTION_PACKAGE.md`.
 
 **Interpretation, fixed in advance:**
 

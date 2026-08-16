@@ -66,9 +66,15 @@ Identical for every candidate, including the baseline.
 | Classifier | YOLOv8n-cls, unmodified, in all five rows |
 | FLOPs convention | 2 × MACs, via `thop`, traced on CPU for device-independence |
 
-**Parameters, FLOPs, tensor shapes and interfaces are hardware-independent and
-final.** Latency, throughput and peak GPU memory are CUDA-only and are **not yet
-measured** — see §8.
+**Parameters, tensor shapes and interfaces are hardware-independent and final.**
+Latency, throughput and peak GPU memory were **measured on a Tesla T4 on
+16 Aug 2026** — see §8.
+
+⚠ **The FLOPs convention above is defective.** `thop` over-counts
+`ConvTranspose2d` by stride², inflating every auto-encoder-bearing row. Corrected
+figures are in §8; the derivation and empirical verification are in
+`PROTOCOL_AMENDMENT_2026-08-16.md` §A2. The uncorrected values are retained
+throughout §1–§7 as the historical record.
 
 ---
 
@@ -299,54 +305,131 @@ question before anything is frozen.
 
 ---
 
-## 8. What is still missing: T4 latency
+## 8. Official Tesla T4 latency — **MEASURED 16 Aug 2026**
 
-Latency, throughput and peak GPU memory **have not been measured** and are not in
-this document. They require a CUDA device; this machine has none, and the frozen
-protocol forbids quoting non-CUDA timings as evidence. A CPU sanity run confirmed
-the ordering (C0 ≫ C1 > C2 > C3) and that the harness works, but those numbers are
-development output and are deliberately excluded here.
+Executed on Tesla T4 with `--batch-sizes 1 32 --warmup 50 --iters 200`, all five
+models in one process on one GPU. These supersede the "not yet measured" status
+this section previously carried. **Read `PROTOCOL_AMENDMENT_2026-08-16.md` before
+quoting any verdict from this run.**
 
-```bash
-# COLAB — Tesla T4, completes the benchmark
-python scripts/benchmark_architectures.py --device cuda --pretrained
-```
+Run provenance from the JSON: commit `3d5f1c4`, clean tree, Tesla T4, torch
+2.11.0+cu128 / CUDA 12.8, `device_audit.verified: true` for every candidate.
+**Note the JSON names the 7×7 candidate `C2`, not `C2-7`.**
 
-This produces, for all five rows at batch 1 and 32: mean/median/std latency over
-200 timed iterations after 50 warm-up, throughput, and peak GPU memory — and
-evaluates the latency criteria automatically, writing
-`verdict.latency_criterion_evaluated: true`.
+| Candidate | BS1 latency | × base | BS1 img/s | BS32 per-image | × base | BS32 img/s | Peak MiB BS1 | Peak MiB BS32 |
+|---|---|---|---|---|---|---|---|---|
+| **BASELINE** YOLOv8n-cls | **3.3632 ms** | 1.000 | 297.34 | **0.22906 ms** | 1.000 | 4365.58 | 41.61 | 130.61 |
+| **C0 = Original AE-TFPE** | 28.5088 ms | **8.477×** | 35.08 | 10.7734 ms | **47.033×** | 92.82 | 378.12 | 646.25 |
+| **`C2` = C2-7** | 27.0000 ms | **8.028×** | 37.04 | 1.2318 ms | 5.378× | 811.74 | 50.53 | 273.07 |
+| **C2-14** | 16.3708 ms | **4.868×** | 61.08 | 1.2260 ms | 5.352× | 815.63 | 58.54 | 281.09 |
+| **C2-28** | 10.2045 ms | **3.034×** | 98.00 | 1.2908 ms | 5.635× | 774.78 | 65.21 | 287.75 |
 
-**The cost verdicts in §1 will not change** — parameters and FLOPs are
-hardware-independent. Only the latency columns are pending. C0 and C1 are already
-hard-rejected on FLOPs alone, so the T4 run is decisive only between C2 and C3, and
-for confirming C2 clears the 3× latency bar.
+⚠ **Batch-1 latency is noisy: 15–30 % relative standard deviation.** C2-28's mean
+ratio is 3.034× but its median ratio is **2.923×** — the two straddle the 3×
+threshold, and the standard deviation (2.04 ms) is ~60× the gap to it. The rule
+does not specify mean or median. See amendment §A5: **no claim may rest on the 3×
+boundary until batch-1 latency is re-measured with lower variance.** Batch-32
+timings are tight (0.9–2.7 %) and need no such caveat.
+
+### The result that inverts the FLOPs ordering
+
+**C2-7 has the fewest FLOPs and nearly the worst latency.** It is 2.6× slower than
+C2-28 at batch 1 while computing *less* arithmetic. FLOPs are a poor proxy here:
+the 7×7 stage runs a 320-channel 1×1 encoder on a 49-pixel grid and carries two
+extra bilinear interpolations inside MobileViT's stage-4 block (`DECODER_PATH_AUDIT.md`
+§C). Small tensors, many kernel launches — latency-bound, not arithmetic-bound.
+
+**This vindicates measuring latency on the real device rather than inferring it.**
+Any selection made on FLOPs alone would have chosen C2-7, the slowest viable
+candidate at batch 1.
+
+### Two audits were commissioned on this run — both found defects
+
+| Audit | Finding | Where |
+|---|---|---|
+| Decision-rule consistency | The latency criterion is bound to `args.batch_sizes[0]` — the verdict depends on **CLI argument order**, and the pre-registered rule never named a batch size | `PROTOCOL_AMENDMENT_2026-08-16.md` §A1 |
+| Decoder shape path | `describe()` misreports decoder depth; the architecture itself is correct and contains **no interpolation** in any decoder | `DECODER_PATH_AUDIT.md`, amendment §A3 |
+| *(found during the above)* | `thop` over-counts `ConvTranspose2d` by stride² = 4×, inflating every AE-bearing candidate's GFLOPs | amendment §A2 |
+| *(found during the above)* | `tf.project` / `tf.norm` are dead parameters in every C2-* candidate | amendment §A4 |
+
+**The `verdict` field in `t4_benchmark.json` must not be quoted** until §A1 is
+resolved. The latency measurements above are unaffected and stand.
+
+### Corrected FLOPs — **[DERIVED]**, see amendment §A2
+
+`thop`'s transposed-convolution over-count was verified empirically against
+ground truth. Corrected, uniformly, for every candidate:
+
+| Candidate | GFLOPs as reported | × base | GFLOPs corrected | × base |
+|---|---|---|---|---|
+| BASELINE | 0.4116 | 1.000 | 0.4116 | 1.000 |
+| C0 = Original AE-TFPE | 36.2215 | 88.00× | **34.8728** | **84.73×** |
+| C2-7 | 1.1279 | 2.740× | **0.9786** | **2.378×** |
+| C2-14 | 1.3896 | 3.376× | **1.0043** | **2.440×** |
+| C2-28 | 1.8215 | 4.425× | **1.0123** | **2.459×** |
+
+The three grids are **near-identical in FLOPs** (2.38 / 2.44 / 2.46) once the
+over-count is removed. FLOPs do not separate them; measured BS1 latency does.
+Any argument in `ARCHITECTURE_V2_SPATIAL_TRADEOFF.md` that rests on the
+2.74 → 3.38 → 4.43 progression must be rewritten.
 
 ---
 
-## 9. Recommendation
+## 9. Standing of C2-28 after the T4 run
 
-**Per the frozen decision rules: C2** — MobileViT-XXS + slim feature-space AE +
-unmodified YOLOv8n-cls. It meets the preferred target on both measurable criteria
-(1.71× params, 2.74× FLOPs, both inside the ≤3 M / ≤3× bounds), preserves Eq. (4),
-keeps the classifier unmodified, and makes §5.1/§5.3 true.
+Superseded the pre-T4 recommendation below. Under the **proposed** BS1-primary
+clarification (amendment §A1 — not yet adopted), C2-28 is classified criterion by
+criterion:
 
-C3 is cheaper still (1.52× / 1.96×) but requires rewriting Eq. (4) for linear
-attention, and the rules select C3 only if C2 fails. C2 does not fail.
+| Criterion | Measured | Classification |
+|---|---|---|
+| **Parameters** | 1,716,739 · 1.15× baseline · ≤ 3 M | **PREFERRED** |
+| **FLOPs** | 4.425× as reported, **2.459× corrected** | **CONDITIONAL** — depends on adopting §A2 |
+| **BS1 latency** *(primary)* | 10.2045 ms · **3.034× mean, 2.923× median** vs a 3.0× threshold | **INDETERMINATE** — mean and median straddle the threshold (§A5) |
+| **BS32 throughput** *(secondary)* | 5.635× per-image · 774.78 vs 4365.58 img/s | **SUBSTANTIAL OVERHEAD** relative to baseline |
+| **Model size** | 7.156 MB · 1.255× baseline | preferred |
+| **Peak CUDA memory** | 65.21 MiB BS1 (1.57× base) · 287.75 MiB BS32 (2.20× base) | moderate overhead; **5.80× / 2.25× lower than Original AE-TFPE** |
 
-Option B (training-only auxiliary branches) is **not** triggered: it applies only
-if both C2 and C3 exceed the hard-reject threshold, and neither does.
+### Overall: **CONDITIONAL CANDIDATE — NOT YET VALIDATED**
 
-### Before any re-freeze, three things must happen
+C2-28 remains the **leading Efficient AE-TFPE candidate**. It is **not** adopted,
+**not** validated, and **not** shown to be accurate — no C2-28 model has been
+trained. `meets_preferred` is **false** under every accounting in this document.
 
-1. **Run the T4 benchmark** (§8) to close the latency criterion.
-2. **Resolve the latent-bottleneck risk** (§7) — recommended via option 1, a single
-   short C2 run checked against G4's clean-accuracy floor.
-3. **Decide the §3.3 rewording and Fig. 2 redraw** (§6), since these change what the
-   paper claims the AE consumes.
+**C2-28 must not be described as "efficient" on the strength of this benchmark.**
+It has been measured for cost only. The phrases **"negligible overhead"** and
+**"baseline-equivalent efficiency"** are forbidden: they are contradicted by
+3.034× BS1 latency and 5.635× BS32 per-image cost.
+
+The defensible statement is:
+
+> **C2-28 substantially reduces the computational burden of Original AE-TFPE, but
+> still incurs meaningful overhead over YOLOv8n-cls.**
+
+### Before any re-freeze
+
+1. ~~Run the T4 benchmark~~ — **done**, §8.
+2. **Resolve the five decisions** in `PROTOCOL_AMENDMENT_2026-08-16.md`, starting
+   with the unreconciled C2-7 verdict value.
+3. **Resolve the latent-bottleneck risk** (§7) via the single C2-28 clean-validation
+   sanity run — **prepared, not executed**.
+4. **Resolve the determinism finding** (`MAJOR_REVISION_TWO_METHOD_STRATEGY.md` §9a).
+5. **Decide the §3.3 rewording and Fig. 2 redraw** (§6).
 
 Only then is `revision-protocol-v2` justified. Nothing in v1 has been re-frozen,
 and the 16 frozen arms remain byte-identical.
+
+### Superseded pre-T4 recommendation *(kept for the audit trail)*
+
+> Per the frozen decision rules: C2 — it meets the preferred target on both
+> measurable criteria (1.71× params, 2.74× FLOPs). C3 is cheaper still (1.52× /
+> 1.96×) but requires rewriting Eq. (4) for linear attention. Option B is not
+> triggered.
+
+That recommendation was reached **before** any latency existed, and on FLOPs that
+are now known to be inflated. The T4 run shows FLOPs would have selected C2-7 —
+the slowest viable candidate at batch 1. Retained as evidence of what the
+pre-registered rules produced at the time, not as a live recommendation.
 
 ---
 
