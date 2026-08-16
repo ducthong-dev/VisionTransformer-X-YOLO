@@ -345,6 +345,27 @@ Run provenance from the JSON: commit `3d5f1c4`, clean tree, Tesla T4, torch
 | **C2-14** | 16.3708 ms | **4.868×** | 61.08 | 1.2260 ms | 5.352× | 815.63 | 58.54 | 281.09 |
 | **C2-28** | 10.2045 ms | **3.034×** | 98.00 | 1.2908 ms | 5.635× | 774.78 | 65.21 | 287.75 |
 
+### Batch-1 stability re-measurement — **[MEASURED] 16 Aug 2026**
+
+Warm-up 100, 1000 timed iterations, Tesla T4, commit `6f71f1b`.
+Raw: `docs/evidence/2026-08-16_t4_bs1_stability_raw.json`.
+
+| Model | mean | std | std/mean | median | p95 | × base (mean) | peak MiB |
+|---|---|---|---|---|---|---|---|
+| BASELINE | 3.4648 ms | 0.7737 | 22.3 % | 3.1231 | 5.2708 | 1.000 | 41.61 |
+| **C2-28** | 10.4558 ms | 2.0587 | 19.7 % | 9.2627 | 14.9690 | **3.018** | 47.32 |
+
+The ratio reproduced (3.034 → 3.018) but **relative variance did not fall** with 5×
+the samples, so the spread is intrinsic to the T4 at batch 1 rather than sampling
+noise. C2-28 misses the ≤3× band by 0.018× against a 2.06 ms standard deviation:
+**indistinguishable from the threshold at this precision.** Decision statistic
+remains the mean (§A5). `meets_preferred: false`, `hard_reject: false`.
+
+⚠ **C2-28's batch-1 peak memory did not reproduce**: 65.21 MiB in the 5-model run
+versus 47.32 MiB here, while BASELINE is identical (41.61 MiB) in both. Probable
+cause is caching-allocator state, but that is unverified — **no C2-28 memory figure
+should be published until it reproduces.**
+
 ⚠ **Batch-1 latency is noisy: 15–30 % relative standard deviation.** C2-28's mean
 ratio is 3.034× but its median ratio is **2.923×** — the two straddle the 3×
 threshold, and the standard deviation (2.04 ms) is ~60× the gap to it. The rule

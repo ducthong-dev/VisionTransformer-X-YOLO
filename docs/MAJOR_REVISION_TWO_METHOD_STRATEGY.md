@@ -16,6 +16,10 @@ arithmetic from measurements · **[HYPOTHESIS]** reasoned but unverified · **[N
 > `docs/evidence/2026-08-16_t4_benchmark_raw.json`.
 > **C2-28 is a CONDITIONAL CANDIDATE, not yet validated, and not to be called
 > "efficient" on cost evidence alone** (§3.3).
+>
+> **The staged campaign replaces the flat 19-run matrix in §7** — see
+> `EXPERIMENT_CAMPAIGN_V2_PLAN.md`. The C2-28 training run is **not yet
+> ingested**; see `C2_28_TRAINING_EVIDENCE.md` for what is blocked and why.
 
 ---
 
@@ -237,6 +241,55 @@ the 3× band, BS32 throughput a substantial overhead. **No C2-28 model has been
 trained**, so nothing is yet known about its accuracy or robustness. It must not
 be called "efficient" on the strength of a cost benchmark alone.
 
+### 3.5 Architecture definition to be frozen on adoption — **Efficient AE-TFPE = C2-28**
+
+Written out now so adoption is a decision about evidence, not about scope. Nothing
+here is frozen yet.
+
+| Element | Frozen value |
+|---|---|
+| Backbone / encoder | `mobilevit_xxs` (timm, ImageNet-pretrained), **frozen** (`requires_grad=False`) |
+| Stage | `tf_stage = 2` — the backbone is **truncated** after stage 2, so stages 3–4 are never built or executed |
+| Feature grid | **28 × 28**, 48 channels, stride 8 → ~8 px effective cell |
+| Image-space projection head | **not built** (`image_space_head=False`) — never executed on this path |
+| PE behaviour | **unchanged from Original AE-TFPE**: 2-D sinusoidal, 16×16 patch grid, `d=3`, γ=0.1, added in image space. Not modified, rescaled, normalised or rescued |
+| PE→grid adaptation | `F.adaptive_avg_pool2d(pe, (28, 28))` — a downsample, no learnable parameters |
+| Fusion operator | **concatenation** at the grid: `[B,3,28,28] ⊕ [B,48,28,28] → [B,51,28,28]` |
+| AE input channels | **51** (48 backbone + 3 pooled PE) |
+| AE type | `SlimFeatureSpaceAE` — sparse denoising, feature space |
+| Latent | **64 × 28 × 28**, sigmoid activation (so channel means stay valid Bernoulli parameters for the KL term) |
+| Encoder | `Conv1×1 → BN → Sigmoid` at 28×28, **no spatial reduction** |
+| Decoder | **3 × ConvTranspose2d(k=4, s=2, p=1)**, `28 → 56 → 112 → 224`; widths 64→48→32→3; BN+ReLU after the first two, Sigmoid at the output. **No interpolation anywhere** |
+| Classifier | **YOLOv8n-cls, unmodified**, 3-channel stem, 1,488,247 params |
+| Trainable | AE + classifier — **1,567,066** |
+| Frozen | truncated MobileViT-XXS backbone — 149,520 |
+| Total | **1,716,586** |
+| Reconstruction objective | MSE(x̂, x_clean) + β·KL(ρ‖ρ̂), β = 1e-3, ρ = 0.05; **corrupted input, clean target** (denoising); loss weight 10.0, 3-epoch reconstruction-only warm-up |
+| Classification objective | cross-entropy, label smoothing 0.0 |
+| Interface contract | classifier receives `[B, 3, 224, 224]` in `[0, 1]` |
+
+### 3.6 Batch-1 latency stability re-measurement — **[MEASURED] 16 Aug 2026**
+
+Required by amendment §A5 before any claim could rest on the 3× boundary.
+Warm-up 100, 1000 timed iterations, Tesla T4, commit `6f71f1b`.
+Raw: `docs/evidence/2026-08-16_t4_bs1_stability_raw.json`.
+
+| Model | mean | std | std/mean | median | p95 | × base (mean) |
+|---|---|---|---|---|---|---|
+| BASELINE | 3.4648 ms | 0.7737 | 22.3 % | 3.1231 | 5.2708 | 1.000 |
+| **C2-28** | 10.4558 ms | 2.0587 | 19.7 % | 9.2627 | 14.9690 | **3.018** |
+
+**It confirmed the number rather than resolving the question.** The ratio
+reproduced (3.034 → 3.018) but **relative variance did not fall** despite 5× the
+samples — it is intrinsic to the T4 at batch 1, not sampling noise. C2-28 misses
+the ≤3× preferred band by **0.018×** (≈0.06 ms) against a 2.06 ms standard
+deviation, so **C2-28 and the 3× threshold are indistinguishable at this
+measurement's precision**. Report the ratio with its dispersion; claim neither side
+of the boundary. The decision statistic remains the **mean** (§A5), fixed in code
+before the run.
+
+---
+
 ### 3.4 Latency bands
 
 Bands apply to **Efficient AE-TFPE only** (Original AE-TFPE's cost is a finding
@@ -416,6 +469,29 @@ frozen test benchmark ≈ 21 GB (**not yet generated**).
 
 No manuscript edits made. "Expected revision" assumes the evidence lands supportive;
 "Required revision" assumes it does not.
+
+> **Updated 16 Aug 2026.** Each claim now carries a status from the fixed set:
+> SUPPORTED NOW · PARTIALLY SUPPORTED · REQUIRES ABLATION · REQUIRES ROBUSTNESS
+> EVIDENCE · UNSUPPORTED / SHOULD BE REMOVED. The C2-28 clean-training run is
+> **not yet ingested** (`C2_28_TRAINING_EVIDENCE.md`), so no status below depends
+> on it; rows that would change once it arrives are marked **(pending C2-28)**.
+
+| # | Claim | **Status** | Basis / what would change it |
+|---|---|---|---|
+| — | **Lightweight *relative to Original AE-TFPE*** | **SUPPORTED NOW** | **[MEASURED]** 51.0× fewer params, 34.4× fewer FLOPs, 2.79× lower batch-1 latency, 8.35× higher batch-32 throughput, 46.8× smaller, 5.80× lower batch-1 peak memory. Hardware-independent and T4-measured |
+| — | **Efficient *relative to the YOLOv8n-cls baseline*** | **UNSUPPORTED / SHOULD BE REMOVED** | **[MEASURED]** C2-28 costs *more* than the baseline on every axis: +15.4 % params, +146 % FLOPs, **3.018× batch-1 latency**, 5.635× batch-32 per-image, −82.3 % throughput. "Efficient" is meaningful only against Original AE-TFPE, never against the classifier |
+| — | **Clean classification capability** | **REQUIRES EVIDENCE (pending C2-28)** | The completed run answers it; artifacts not yet transferred. No fair Protocol-B baseline exists either (Stage A) |
+| — | **PE contribution** | **REQUIRES ABLATION** | **[MEASURED]** PE is 99.71 % constant, and its effect on the transformer is stage-4-specific (283×/23×/11× at stages 4/3/2). At stage 2 a null result is *expected*. Stage C |
+| — | **Transformer contribution** | **REQUIRES ABLATION** | Stage C, on the Efficient side — Original-side results are not assumed to transfer |
+| — | **AE contribution** | **REQUIRES ABLATION** | Stage C. The clean run can show the AE is *trainable*, never that it *contributes* |
+| — | **AE fusion superiority** | **REQUIRES ABLATION** | Stage D. Needs at least concat+projection and attention **on the Efficient architecture** |
+| — | **Noise-resilient latent features** | **REQUIRES ROBUSTNESS EVIDENCE** | Stage F. **Clean training cannot support this claim at all**, whatever the C2-28 numbers show |
+| — | **Robustness under degradation** | **REQUIRES ROBUSTNESS EVIDENCE** | Stage E, attributed against M1/M2/M3 — a zero-parameter LUT alone already gave 1.81× |
+| — | **Deployment suitability / real-time on constrained devices** | **PARTIALLY SUPPORTED** | **[MEASURED]** Original is refuted (28.51 ms, 34.87 GFLOPs). C2-28 at 10.46 ms ≈ 96 img/s single-image is plausible for interactive use but is **3.018× the classifier it wraps**; state measured numbers, drop "real-time" |
+| — | **Real-world robustness (§4.6.4)** | **UNSUPPORTED / SHOULD BE REMOVED** | **[MEASURED]** 74 blueberry images, 8 usable classes, one with a single image. Withdraw §4.6.4 and Figs. 11–12 |
+| — | **Model-agnostic** | **PARTIALLY SUPPORTED** | **[MEASURED]** the classifier is unmodified in every arm except F2 (6-channel stem); the YOLOv6–v10 sweep is **[RECOVERED]** unreproducible. Keep the measured half, withdraw the sweep |
+
+### Original per-claim detail *(retained; evidence status above governs)*
 
 | # | Original claim | Evidence available now | Evidence still required | If supported | If unsupported |
 |---|---|---|---|---|---|
