@@ -266,7 +266,17 @@ is demoted or removed — which is scientifically preferable to a post-hoc rescu
 
 ---
 
-## 7. Task 7 — Revised experiment matrix (proposal only)
+## 7. Task 7 — Revised experiment matrix (**candidate minimum, NOT final**)
+
+> **CORRECTION, 16 Aug 2026, per supervisor review.** The 19-run matrix below is
+> the **current minimum candidate matrix**, not the final frozen matrix.
+> **RQ2/RQ3 conclusions measured on Original AE-TFPE are NOT assumed to transfer
+> to Efficient AE-TFPE**, because Efficient AE-TFPE changes *both* the transformer
+> encoder *and* the AE operating space — two simultaneous changes, either of which
+> could alter which components matter and which fusion operator wins. Whether an
+> additional Efficient-side fusion control is required will be decided **after E5
+> and E3 evidence exists**, not now.
+
 
 ### 7.1 All 16 frozen runs remain necessary
 
@@ -291,8 +301,8 @@ architecture-independent and are reused by both methods.
 **Deliberately excluded** — recorded so the omissions are visible, not accidental:
 
 - **C2-14**: dominated on the measured frontier (costlier than C2-7, still cannot localise lesions). **[MEASURED]**
-- **Efficient-side fusion comparison** (add / concat / attention at stage 2): RQ3 is answered once on Original AE-TFPE. **[HYPOTHESIS]** the ranking of fusion operators is a property of the concept, not the encoder. Mark **P2**; add only if a reviewer asks.
-- **Efficient-side full component ablation** (E1, E2, E4): RQ2 answered on Original. E3 alone tests whether the AE conclusion transfers.
+- **Efficient-side fusion comparison** (add / concat / attention at stage 2): **DEFERRED, not excluded.** RQ3 is answered on Original AE-TFPE first. Whether the operator ranking transfers is an open question — Efficient AE-TFPE changes both the encoder and the AE operating space — and is to be decided **once E5 and E3 results exist**. It is explicitly *not* assumed to transfer.
+- **Efficient-side full component ablation** (E1, E2, E4): **DEFERRED on the same basis.** E3 provides the first evidence on whether the AE conclusion transfers; the remaining component arms are revisited after that evidence, not ruled out in advance.
 
 ### 7.3 Totals
 
@@ -300,7 +310,7 @@ architecture-independent and are reused by both methods.
 |---|---|
 | Unique trainings, frozen v1 | 16 |
 | New Efficient runs | +3 |
-| **Total unique trainings** | **19** |
+| **Total unique trainings (candidate minimum)** | **19** |
 | Table rows served by reuse | F3 = A3, F5 = D1 |
 
 **[DERIVED]** compute, extrapolated from the recovered 1.98 h / 30-epoch baseline
@@ -397,6 +407,29 @@ half of the sentence is not.
 | Component ablation | A0 → A1 → A2 → A3 → A4 → A5, with `A1_pe_only` pre-registered as possibly null and reported either way |
 | Fusion comparison | Addition, concatenation, concatenation+projection, attention, AE — all five requested comparators, with F2's stem modification disclosed |
 | Terminology and equations | Eq. (3)/(5)/(6) defects, "multi-headed"→"multi-head", "GoogleLetNet"→"GoogLeNet", symbol definitions — all queued in the change map |
+
+---
+
+## 9a. Newly identified risk — determinism
+
+**[MEASURED]** while instrumenting the trainer, using the **baseline arm only**
+(pure frozen-v1 code paths):
+
+| Device | Two identical runs, seed 0 | Result |
+|---|---|---|
+| CPU | `train_loss` 3.73670347 vs 3.73670347 | **identical** |
+| MPS | `train_loss` 3.54054185 vs 3.73592884 | **divergent** |
+| CUDA | — | **[NOT YET TESTED]** |
+
+`SCIENTIFIC_PROTOCOL_FROZEN.md` asserts `seed=0, deterministic=True`. That holds on
+CPU, fails on Apple MPS, and is **unverified on the actual training device**. No
+current conclusion rests on an MPS number — every MPS run to date was a labelled
+plumbing check — but this must be resolved before `revision-protocol-v2`.
+
+`seed_everything()` sets `cudnn.deterministic=True` but not
+`torch.use_deterministic_algorithms(True)`. Strengthening it would change training
+behaviour, so it has **not** been changed; the Colab package tests CUDA determinism
+in ~2 minutes first, so the decision can be made with evidence.
 
 ---
 

@@ -131,3 +131,46 @@ def full_profile(model, device="cpu", batch_size=1, img_size=224, in_channels=3)
     out.update(measure_latency(model, device=device, batch_size=batch_size, img_size=img_size))
     out["hardware"] = hardware_info(device)
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Peak-memory instrumentation for the training loop.
+#
+# Instrumentation only: these helpers read counters and never influence
+# allocation, scheduling or numerics. They are no-ops on non-CUDA devices, so the
+# trainer stays portable on CPU and Apple MPS.
+#
+# torch.mps has no equivalent of max_memory_allocated()/max_memory_reserved()
+# with the same semantics, so MPS is deliberately reported as unavailable rather
+# than approximated with a different quantity.
+# --------------------------------------------------------------------------- #
+
+
+def reset_peak_memory(device: str) -> None:
+    """Reset CUDA peak-memory counters. Call immediately before training starts."""
+    if str(device).startswith("cuda") and torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+
+
+def peak_memory_stats(device: str) -> dict:
+    """Peak CUDA memory since the last reset, in MiB.
+
+    Returns `available: False` on any non-CUDA device -- never a fabricated
+    number, and never a value borrowed from a different memory model.
+    """
+    if not (str(device).startswith("cuda") and torch.cuda.is_available()):
+        return {"available": False, "device": str(device),
+                "note": "peak memory is CUDA-only; not measured on this device"}
+    return {
+        "available": True,
+        "device": str(device),
+        "peak_allocated_mb": round(torch.cuda.max_memory_allocated() / (1024 ** 2), 2),
+        "peak_reserved_mb": round(torch.cuda.max_memory_reserved() / (1024 ** 2), 2),
+    }
+
+
+def current_peak_allocated_mb(device: str) -> float | None:
+    """Running peak allocated MiB, for per-epoch logging. None when unavailable."""
+    if not (str(device).startswith("cuda") and torch.cuda.is_available()):
+        return None
+    return round(torch.cuda.max_memory_allocated() / (1024 ** 2), 2)

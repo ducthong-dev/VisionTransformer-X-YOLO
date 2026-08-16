@@ -31,6 +31,9 @@ from torch.utils.data import DataLoader
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from aetfpe.autoencoder.losses import ae_loss  # noqa: E402
+from aetfpe.complexity import (  # noqa: E402
+    current_peak_allocated_mb, peak_memory_stats, reset_peak_memory,
+)
 from aetfpe.config import (  # noqa: E402
     build_protocol, environment_info, load_experiment, pick_device, resolve_roots,
     save_run_provenance,
@@ -98,7 +101,7 @@ def run_epoch(model, loader, device, protocol, cfg, optimizer=None, scheduler=No
     denoise = model.cfg.ae_denoising
     aug_corrupt = bool((cfg.get("train") or {}).get("corruption_augmentation", False))
 
-    tot = correct = 0
+    tot = correct = correct5 = 0
     loss_sum = 0.0
     comps = {"ae_recon": 0.0, "ae_kl": 0.0}
 
@@ -135,10 +138,17 @@ def run_epoch(model, loader, device, protocol, cfg, optimizer=None, scheduler=No
                 scheduler.step()
 
         loss_sum += float(loss.detach()) * y.size(0)
-        correct += int((logits.argmax(1) == y).sum())
+        # Metrics only -- computed on detached logits, so they cannot affect the
+        # graph, the gradients or the optimiser state.
+        with torch.no_grad():
+            det = logits.detach()
+            correct += int((det.argmax(1) == y).sum())
+            k = min(5, det.shape[1])
+            correct5 += int((det.topk(k, dim=1).indices == y[:, None]).any(dim=1).sum())
         tot += y.size(0)
 
-    stats = {"loss": loss_sum / max(tot, 1), "top1": correct / max(tot, 1), "n": tot}
+    stats = {"loss": loss_sum / max(tot, 1), "top1": correct / max(tot, 1),
+             "top5": correct5 / max(tot, 1), "n": tot}
     if use_ae and tot:
         stats["ae_recon"] = comps["ae_recon"] / tot
         stats["ae_kl"] = comps["ae_kl"] / tot
@@ -240,6 +250,11 @@ def main() -> int:
 
     history, best = [], -1.0
     ckpt = os.path.join(out_dir, "checkpoint.pt")
+
+    # Instrumentation: reset CUDA peak-memory counters immediately before the
+    # first training step, so the recorded peak covers training only and not
+    # model construction or weight download. No-op off CUDA.
+    reset_peak_memory(device)
     t_start = time.time()
 
     warmup_epochs = protocol.ae_warmup_epochs if model.cfg.use_ae else 0
@@ -253,6 +268,7 @@ def main() -> int:
         va_stats = run_epoch(model, vl, device, protocol, cfg)
         row = {"epoch": ep + 1, "seconds": round(time.time() - t0, 2),
                "lr": optimizer.param_groups[0]["lr"], "stage": "ae_warmup" if ae_only else "joint",
+               "peak_cuda_alloc_mb": current_peak_allocated_mb(device),
                **{f"train_{k}": v for k, v in tr_stats.items()},
                **{f"val_{k}": v for k, v in va_stats.items()}}
         history.append(row)
@@ -279,10 +295,17 @@ def main() -> int:
         "protocol": asdict(protocol), "model": desc,
         "environment": environment_info(), "device": device,
         "checkpoint": ckpt,
+        "peak_memory": peak_memory_stats(device),
     }
     with open(os.path.join(out_dir, "train_summary.json"), "w") as fh:
         json.dump(summary, fh, indent=2, default=str)
 
+    pm = summary["peak_memory"]
+    if pm.get("available"):
+        print(f"[{name}] peak CUDA memory: {pm['peak_allocated_mb']:.1f} MiB allocated, "
+              f"{pm['peak_reserved_mb']:.1f} MiB reserved")
+    else:
+        print(f"[{name}] peak CUDA memory: not measured ({pm['device']})")
     print(f"[{name}] best val top-1 = {best:.4f}  ->  {out_dir}")
     return 0
 
