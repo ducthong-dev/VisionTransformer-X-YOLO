@@ -96,10 +96,12 @@ Two values need validation-based justification, not a search. One factor varied 
 | V1b | 1 | 3 | is the reweighting necessary? |
 | V1c | 10 | 0 | is the warm-up necessary? |
 
-- **Data:** 20% stratified subset of the *training* split; evaluated on the full **validation** split and on `corruptions_val` at `pepper/030`.
-- **Budget:** 10 epochs each, ~20 min per run on a T4 → **~1 GPU-hour total**.
+- **Data:** `--limit-train-per-class 200` on the *training* split. Measured against the real dataset: 7,699 of 38,584 images = **19.95%** (only 2 of 39 classes have fewer than 200 images, so this is a per-class cap that lands close to but is not exactly a uniform 20%-per-class stratification). Evaluated on the **full** validation split (8,340 images) and on `corruptions_val` — never on the training-side cap.
+- **Budget:** measured, not guessed — extrapolated from a real 8-epoch MPS run of this exact model (28.97 s/epoch over 312 train + 312 val images at batch 32, i.e. 0.0464 s/image-epoch). At V1's scale (7,699 train + 8,340 val = 16,039 images/epoch, 10 epochs), that is ≈2.1 GPU-hours per candidate on MPS-equivalent hardware. A T4 with cuDNN is typically 1.5–4x faster for this workload (no AMP is used, so the Tensor Core advantage is partly unrealized) → **≈0.5–1.4 h per candidate, ≈1.5–4.2 h for all three**. Confirm from the real first-epoch wall-clock on Colab before trusting this range for later, larger stages.
+- **Disk:** each A5-family checkpoint is **335 MB**, not the ~3 MB of a plain YOLO arm — `state_dict()` serializes the frozen ViT-B/16's 85.8M weights on every save, since PyTorch does not distinguish frozen from trainable parameters when serializing. Three candidates ≈ 1.0 GB. Small in absolute terms; worth knowing before assuming checkpoint size scales like the plain baselines.
 - **Selection rule, pre-committed:** pick the setting with the highest **validation** top-1. If two are within 0.5 pp, prefer the simpler one (lower weight, fewer warm-up epochs). Robustness on `corruptions_val` is reported but does **not** drive selection.
 - **Outcome:** the winner is frozen into `_base.yaml` and never revisited. If V1b or V1c wins, the current defaults change accordingly — that is the point of running it.
+- **Test-set isolation:** V1 evaluation runs through `scripts/evaluate_calibration.py`, a dedicated script with no code path that can construct a test-split path at all (not merely a flag that skips it) — see that script's docstring for the defect it replaces. `scripts/select_v1.py` additionally refuses to compute a selection if it finds any evidence (`test_clean.json`, `test_corruptions.csv`) that a candidate's run directory was ever evaluated against the frozen test benchmark.
 
 This is three short runs, not a sweep, and it converts two LOW-confidence reconstructions into documented, validation-justified choices.
 
@@ -212,12 +214,13 @@ The only permitted candidates. No other combination may be run.
 
 | Setting | Value |
 |---|---|
-| Training data | 20% stratified subset (`--limit-train-per-class 200`) |
-| Validation data | **100%** of the validation split (`--limit-val-per-class` unset) |
-| Robustness data | `corruptions_val` only — never the test benchmark |
+| Training data | `--limit-train-per-class 200` -> 7,699 / 38,584 = **19.95%** of training |
+| Validation data | **100%** of the validation split, 8,340 images (`--limit-val-per-class` unset) |
+| Robustness data | `corruptions_val` only, via `evaluate_calibration.py` — structurally cannot reach the test benchmark |
 | Epochs | 10 |
 | Selection | highest **validation top-1**; if two are within **0.5 pp**, choose the simpler configuration (lower weight, then fewer warm-up epochs) |
-| Budget | ~1 GPU-hour total |
+| Budget | ≈1.5–4.2 GPU-hours for all three on T4 (extrapolated from a real MPS run; confirm from Colab's first epoch) |
+| Disk | ≈1.0 GB (three 335 MB checkpoints; the frozen ViT weights inflate every A5-family checkpoint) |
 
 **No further tuning is permitted after V1** unless training is demonstrably
 broken — meaning a run diverges, produces NaNs, or sits at chance. "The result

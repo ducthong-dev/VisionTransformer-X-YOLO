@@ -54,18 +54,31 @@ def load_run(run_dir: str) -> dict:
     if val_top1 is None:
         raise SystemExit(f"{run_dir}: train_summary.json has no best_val_top1")
 
-    # optional: mean corrupted validation top-1, if evaluate.py has been run
-    # against corruptions_val for this candidate
+    # optional: mean corrupted validation top-1, if evaluate_calibration.py has
+    # been run against corruptions_val for this candidate. Deliberately reads
+    # val_corruptions.csv (from evaluate_calibration.py), NEVER
+    # test_corruptions.csv (from evaluate.py, which touches the frozen test
+    # split and must never run during Stage V1 -- see evaluate_calibration.py's
+    # docstring for why a dedicated script exists at all).
     corr = None
-    corr_csv = os.path.join(run_dir, "test_corruptions.csv")
+    corr_csv = os.path.join(run_dir, "val_corruptions.csv")
     if os.path.exists(corr_csv):
         import csv as _csv
 
         with open(corr_csv) as fh:
-            vals = [float(r["top1"]) for r in _csv.DictReader(fh)
-                   if r["corruption"] not in ("clean", "clean_testsplit")]
+            vals = [float(r["top1"]) for r in _csv.DictReader(fh) if r["corruption"] != "clean"]
         if vals:
             corr = sum(vals) / len(vals)
+
+    if os.path.exists(os.path.join(run_dir, "test_corruptions.csv")) or \
+       os.path.exists(os.path.join(run_dir, "test_clean.json")):
+        raise SystemExit(
+            f"{run_dir}: found test_corruptions.csv or test_clean.json -- this run "
+            f"directory has been evaluated against the FROZEN TEST BENCHMARK during "
+            f"Stage V1 calibration. This is a protocol violation regardless of "
+            f"whether the number was used in selection. STOP and report this before "
+            f"proceeding; do not silently ignore the file."
+        )
 
     return {
         "run_dir": run_dir,

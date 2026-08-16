@@ -276,9 +276,13 @@ Runs before G3: V1 exercises `A5_aetfpe_full`, which has no dependency on the
 plain-RGB baseline, and this is the order the frozen protocol specifies.
 
 ```bash
-# 20% training subset, FULL validation split -- the decision must be made on
-# complete validation data, so only the training side is limited. The three
-# runs are the ONLY permitted candidates (PROVENANCE_MATRIX.md Section 3b).
+mkdir -p "$OUTPUT_ROOT/validation" "$OUTPUT_ROOT/v1"
+
+# --limit-train-per-class 200 -> 7,699 / 38,584 = 19.95% of training (measured
+# against the real dataset; only 2 of 39 classes have fewer than 200 images).
+# FULL validation split (8,340 images, unlimited) every epoch. The three runs
+# below are the ONLY permitted candidates (PROVENANCE_MATRIX.md Section 3b) --
+# do not add a fourth.
 python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
     --limit-train-per-class 200 \
     --out "$OUTPUT_ROOT/validation/V1a_w10_warm3"        # default _base.yaml values
@@ -291,30 +295,58 @@ python scripts/train.py --config configs/aetfpe_full.yaml --epochs 10 \
     --limit-train-per-class 200 --override protocol.ae_warmup_epochs=0 \
     --out "$OUTPUT_ROOT/validation/V1c_w10_warm0"
 
-# optional but recommended: evaluate each candidate against corruptions_val so
-# select_v1.py can also report mean_corrupted_val_top1 (informational; it does
-# NOT enter the selection rule, which is validation top-1 only)
+# evaluate each candidate against corruptions_val ONLY, via the dedicated
+# calibration script -- NOT scripts/evaluate.py, which unconditionally touches
+# the frozen test split and must never run during Stage V1. This is
+# informational: mean_corrupted_val_top1 does NOT enter the selection rule.
 for d in V1a_w10_warm3 V1b_w1_warm3 V1c_w10_warm0; do
-  python scripts/evaluate.py --run "$OUTPUT_ROOT/validation/$d" \
-      --corruption-root "$OUTPUT_ROOT/corruptions_val" --skip-corruptions=false
+  python scripts/evaluate_calibration.py --run "$OUTPUT_ROOT/validation/$d" \
+      --corruption-root "$OUTPUT_ROOT/corruptions_val"
 done
 
 python scripts/select_v1.py \
     --v1a "$OUTPUT_ROOT/validation/V1a_w10_warm3" \
     --v1b "$OUTPUT_ROOT/validation/V1b_w1_warm3" \
     --v1c "$OUTPUT_ROOT/validation/V1c_w10_warm0"
+
+# persist to Drive immediately -- see the persistence note below
+tar -czf /content/drive/MyDrive/aetfpe_v1_results.tar.gz \
+    -C "$OUTPUT_ROOT" validation/V1a_w10_warm3 validation/V1b_w1_warm3 \
+    validation/V1c_w10_warm0 v1/selection.json
 ```
-**Artifacts:** three run directories under `validation/`;
-`${OUTPUT_ROOT}/v1/selection.json` with the selected candidate and the rule
-applied.
+**Artifacts:** three run directories under `validation/`, each containing
+`checkpoint.pt` (≈335 MB — the frozen ViT-B/16's weights are serialized on every
+save, not just the ≈1.75M trainable parameters), `train_summary.json`,
+`metrics.csv`, `config.yaml`, `environment.json`, and — from the calibration
+script — `val_clean.{json,csv}`, `val_corruptions.csv`,
+`calibration_eval_summary.json`. Plus `${OUTPUT_ROOT}/v1/selection.json` with
+the selected candidate and the rule applied.
 **Pass:** `select_v1.py` applies the frozen rule mechanically — highest
 validation top-1; ties within 0.5 pp go to the simpler configuration. Write the
 selected `ae_loss_weight`/`ae_warmup_epochs` into `configs/_base.yaml` and do
 not revisit. `select_v1.py` refuses to run against any run whose recorded
-hyperparameters don't match one of the three frozen candidates, so a fourth
-candidate cannot be substituted by accident.
+hyperparameters don't match one of the three frozen candidates (no fourth
+candidate), and separately refuses to select if it finds evidence that a
+candidate was ever evaluated against the frozen test benchmark.
 **Fail → PAUSE.** If all three sit at chance, the AE design itself is broken —
 not a case for choosing a fourth candidate.
+
+**Runtime.** Extrapolated from a real 8-epoch MPS run of this exact model
+(0.0464 s/image-epoch): at V1's scale (16,039 images/epoch × 10 epochs) that is
+≈2.1 GPU-hours-equivalent per candidate. A T4 is typically 1.5–4x faster for
+this workload (no AMP, so the Tensor Core advantage is partly unrealized) →
+**≈0.5–1.4 h per candidate, ≈1.5–4.2 h for all three, sequential.** Confirm from
+V1a's real first-epoch wall-clock (printed by `train.py`) before trusting this
+for later, larger stages.
+
+**Disk.** ≈1.0 GB total (three 335 MB checkpoints; everything else is KB-scale).
+Trivial next to the ≈2 GB `corruptions_val` set already on disk from Stage 2A.
+
+**Persistence.** The `tar` + Drive-copy line above is not optional — without it,
+a Colab runtime reset loses all three ≈335 MB checkpoints and the training logs,
+and V1 would have to be re-run from scratch. Run it immediately after
+`select_v1.py` succeeds, before starting anything else. To restore after a
+reset: `tar -xzf /content/drive/MyDrive/aetfpe_v1_results.tar.gz -C "$OUTPUT_ROOT"`.
 
 > `--override` writes into the config **before** the protocol is built, so the
 > override string is saved verbatim in the run's `config.yaml` under `_overrides`
@@ -492,7 +524,7 @@ everything in one session. Timings collected across GPUs are not comparable.
 |---|---|---|
 | 2A validation corruptions | – | ~0.2 (CPU-bound) |
 | 2C G1 CUDA validation | – | <0.1 |
-| 3a V1 hyperparameter freeze | 3 | ~1.0 |
+| 3a V1 hyperparameter freeze | 3 | ~2.5 (range 1.5–4.2, see Stage 3a) |
 | 3b baseline (G3) | 1 | 2.0 |
 | 4 mechanism gate | 4 | 9.0 |
 | 5 component ablation | 4 | 9.2 |
@@ -501,8 +533,8 @@ everything in one session. Timings collected across GPUs are not comparable.
 | 2B test benchmark | – | ~1.5 (CPU-bound) |
 | 8 final evaluation | – | ~4.0 |
 | 9–10 analyses | – | ~1.5 |
-| **Total, gate passes** | **19** | **≈ 51 h** |
-| **Total, G5 fails** | **11** | **≈ 32 h** |
+| **Total, gate passes** | **19** | **≈ 53 h** |
+| **Total, G5 fails** | **11** | **≈ 34 h** |
 
 On an A100 or L4, roughly a third of those figures. Both fit inside the window to
 5 September 2026, provided Stage 3a starts promptly — the schedule risk is
