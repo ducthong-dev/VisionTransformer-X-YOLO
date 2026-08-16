@@ -58,9 +58,50 @@ def _strip_thop_buffers(model: torch.nn.Module) -> int:
     return removed
 
 
+def _count_conv_transpose(m, x, y) -> None:
+    """Correct MAC count for a transposed convolution.
+
+    MEASUREMENT-TOOL DEFECT FIX. thop scores `ConvTranspose2d` with the routine it
+    uses for `Conv2d`, i.e. `y.nelement() * (Cin/groups * k^2 + bias)`. For a
+    forward convolution MACs scale with the OUTPUT element count; for a transposed
+    convolution the computation scatters from the input, so they scale with the
+    INPUT element count. With stride s the output has s^2 times as many elements,
+    so thop over-counts every transposed convolution by s^2 -- 4x at stride 2.
+
+    Verified empirically against ground truth: with unit weights, unit input and
+    zero bias, each output element equals the number of multiply-accumulates that
+    landed in it, so `output.sum()` IS the MAC count. For
+    ConvTranspose2d(48->32, k=4, s=2, p=1) on 56x56: measured 75,700,224;
+    this formula 77,070,336 (the 1.8% excess is border taps discarded by padding,
+    so the figure stays conservative); thop 308,281,344.
+
+    See docs/PROTOCOL_AMENDMENT_2026-08-16.md A2.
+    """
+    xi = x[0]
+    kernel_ops = torch.zeros(m.weight.size()[2:]).numel()
+    ops = xi.nelement() * (m.out_channels // m.groups) * kernel_ops
+    if m.bias is not None:
+        ops += y.nelement()
+    m.total_ops += torch.DoubleTensor([int(ops)])
+
+
+def _transposed_conv_ops() -> dict:
+    """thop custom_ops overriding every transposed-convolution class."""
+    return {
+        torch.nn.ConvTranspose1d: _count_conv_transpose,
+        torch.nn.ConvTranspose2d: _count_conv_transpose,
+        torch.nn.ConvTranspose3d: _count_conv_transpose,
+    }
+
+
 def count_flops(model: torch.nn.Module, input_shape=(1, 3, 224, 224), device="cpu") -> dict:
     """MACs/FLOPs via thop, profiled on `device` (CPU by default, and valid from
     any device since FLOPs are hardware-independent).
+
+    Transposed convolutions are counted by `_count_conv_transpose`, overriding
+    thop's incorrect handler. Figures produced before 16 Aug 2026 used thop's
+    accounting and are inflated for every model containing a transposed
+    convolution; they are marked as such wherever they are quoted.
 
     Placement- and state-neutral: the model is returned exactly as it arrived.
 
@@ -79,8 +120,11 @@ def count_flops(model: torch.nn.Module, input_shape=(1, 3, 224, 224), device="cp
 
         model.to(device).eval()
         x = torch.randn(*input_shape, device=device)
-        macs, _ = profile(model, inputs=(x,), verbose=False)
-        result = {"macs": float(macs), "gflops": float(2 * macs / 1e9)}
+        macs, _ = profile(model, inputs=(x,), custom_ops=_transposed_conv_ops(),
+                          verbose=False)
+        result = {"macs": float(macs), "gflops": float(2 * macs / 1e9),
+                  "flops_convention": "2 x MACs; transposed convs counted from "
+                                      "input elements (thop handler overridden)"}
     except Exception as exc:  # noqa: BLE001 - reported, not swallowed
         result = {"macs": float("nan"), "gflops": float("nan"), "flops_error": str(exc)}
     finally:

@@ -47,6 +47,7 @@ class TimmGlobalContextRGB(nn.Module):
         pretrained: bool = True,
         upsample_mode: str = "bilinear",
         out_index: int | None = None,
+        image_space_head: bool = True,
     ) -> None:
         """`out_index` selects which backbone stage supplies the representation.
 
@@ -83,8 +84,21 @@ class TimmGlobalContextRGB(nn.Module):
             for p in self.backbone.parameters():
                 p.requires_grad_(False)
 
-        self.project = nn.Conv2d(self.backbone_channels, out_channels, kernel_size=1)
-        self.norm = nn.BatchNorm2d(out_channels)
+        # The 1x1 projection and BatchNorm exist only to produce the image-space
+        # TF-RGB tensor in forward(). The feature-space path calls
+        # forward_features() instead and never touches them, which left them as
+        # trainable parameters with permanently-None gradients -- the same defect
+        # class that G1's backward check caught in the fusion module. Not building
+        # them removes 153 dead parameters from C2-28 (969 from C2-7, 201 from
+        # C2-14) and changes no output: see scripts/prove_dead_parameters.py, which
+        # confirms they are absent from the autograd graph reachable from the
+        # logits, never executed, and never receive a gradient -- while the
+        # image-space candidates C0 and C1 have zero dead parameters and therefore
+        # keep the head.
+        self.image_space_head = bool(image_space_head)
+        if self.image_space_head:
+            self.project = nn.Conv2d(self.backbone_channels, out_channels, kernel_size=1)
+            self.norm = nn.BatchNorm2d(out_channels)
 
         self.register_buffer("mean", torch.tensor(IMAGENET_MEAN).view(1, 3, 1, 1), persistent=False)
         self.register_buffer("std", torch.tensor(IMAGENET_STD).view(1, 3, 1, 1), persistent=False)
@@ -104,6 +118,11 @@ class TimmGlobalContextRGB(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """-> [B, out_channels, H, W] in [0, 1], matching TransformerFeatureRGB."""
+        if not self.image_space_head:
+            raise RuntimeError(
+                "this encoder was built with image_space_head=False for the "
+                "feature-space path; call forward_features() instead. Building the "
+                "projection head here would silently reintroduce dead parameters.")
         h, w = x.shape[-2:]
         fmap = torch.sigmoid(self.norm(self.project(self.forward_features(x))))
         return F.interpolate(fmap, size=(h, w), mode=self.upsample_mode, align_corners=False)
@@ -117,6 +136,9 @@ class TimmGlobalContextRGB(nn.Module):
             "frozen": self.frozen,
             "backbone_channels": self.backbone_channels,
             "backbone_reduction": self.backbone_reduction,
-            "output_representation": "last feature stage, 1x1-projected and upsampled",
+            "image_space_head": self.image_space_head,
+            "output_representation": (
+                "last feature stage, 1x1-projected and upsampled" if self.image_space_head
+                else "last feature stage, raw (feature-space path; no projection head built)"),
             "input_normalization": {"mean": IMAGENET_MEAN, "std": IMAGENET_STD},
         }

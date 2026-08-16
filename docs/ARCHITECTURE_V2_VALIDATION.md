@@ -42,12 +42,18 @@ true`).
 | | Params | × base | GFLOPs | × base |
 |---|---|---|---|---|
 | BASELINE | 1,488,247 | 1.00× | 0.4116 | 1.00× |
-| C2 | 2,545,603 | 1.71× | 1.1279 | 2.74× |
-| C3 | 2,264,323 | 1.52× | 0.8055 | 1.96× |
+| C2 | 2,544,634 | 1.71× | 0.9789 | 2.38× |
+| C3 | 2,263,930 | 1.52× | 0.6565 | 1.60× |
 
-Only the latency columns are outstanding. Note that a 2.74× FLOPs ratio does not
-guarantee a ≤3× latency ratio: MobileViT is memory-bandwidth-bound and historically
-under-performs its FLOP count on a T4, so C2 could plausibly land above 3× latency
+> **Corrected 16 Aug 2026** (amendment §A2/§A4): fixed transposed-convolution
+> FLOPs accounting and removal of dead projection-head parameters. No output
+> changed.
+
+**The latency caution below was correct, and understated.** C2 (7×7) measured
+**8.028× baseline at batch 1** on the T4 — not merely above 3×, but above the 5×
+hard-reject threshold, on a 2.38× FLOPs ratio. A 2.38× FLOPs ratio does not
+guarantee a ≤3× latency ratio: MobileViT is memory-bandwidth-bound and
+under-performs its FLOP count on a T4, so C2 landed far above 3× latency
 while passing on FLOPs. **The latency rule is genuinely undecided.**
 
 ---
@@ -292,8 +298,9 @@ in the response letter.**
 ### **CONDITIONAL FAIL — do not adopt C2 as currently specified.**
 
 Not because it is expensive; it comfortably meets the cost targets on the criteria
-measurable so far (1.71× params, 2.74× FLOPs). It fails on **what the efficiency
-costs**:
+measurable so far (1.71× params, 2.38× FLOPs corrected) — though it is now also
+known to be the **slowest** C2 variant measured, at 8.028× baseline batch-1
+latency. It fails on **what the efficiency costs**:
 
 1. **The 7×7 grid removes the discriminative signal.** Each cell covers 32×32 px
    while target lesions are 5–15 px. The qualitative grid shows small spots, lesion

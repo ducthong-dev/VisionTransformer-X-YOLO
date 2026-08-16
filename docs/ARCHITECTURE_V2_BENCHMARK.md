@@ -22,32 +22,49 @@ untouched and were re-verified after every code change: `check_shapes.py` report
 
 ## 1. Headline result
 
-**C2 meets the preferred target on every criterion measurable without a T4. Per the
-frozen decision rule, the recommendation is C2** — subject to one serious risk in
-§7 that the decision rules do not cover and that must be resolved before re-freeze.
+**Superseded by the T4 measurements in §8.** On the hardware-independent cost
+model C2 (7×7) looks best of the C2 family; measured on the T4 it is the *worst*
+of the three at batch 1 (8.028×). The cost model and the hardware disagree, and
+the hardware decides. C2-28 is the leading Efficient AE-TFPE candidate — see §9.
+
+> **Figures below are CORRECTED and supersede the originals.** Two defects were
+> fixed on 16 Aug 2026: `thop` over-counted transposed convolutions by stride²
+> (amendment §A2), and every C2-family candidate carried dead projection-head
+> parameters (§A4). Both are measurement/implementation defects; neither changed
+> any output. The pre-correction figures are preserved in
+> `docs/evidence/2026-08-16_t4_benchmark_raw.json` and in §8.
 
 | | Params | × base | GFLOPs | × base | Verdict on cost |
 |---|---|---|---|---|---|
 | **BASELINE** YOLOv8n-cls | 1,488,247 | 1.00× | 0.4116 | 1.00× | reference |
-| **C0 = Original AE-TFPE** | 87,549,123 | 58.83× | 36.2215 | **88.00×** | reference method; cost is an RQ4 finding |
-| **C1** MobileViT-XXS + image AE | 2,700,147 | 1.81× | 3.0087 | **7.31×** | not viable as an Efficient candidate |
-| **C2** MobileViT-XXS + slim feature AE | 2,545,603 | 1.71× | 1.1279 | **2.74×** | **meets preferred** |
-| **C3** EfficientViT-B0 + slim feature AE | 2,264,323 | 1.52× | 0.8055 | **1.96×** | **meets preferred** |
+| **C0 = Original AE-TFPE** | 87,549,123 | 58.83× | 34.8731 | **84.73×** | reference method; cost is an RQ4 finding |
+| **C1** MobileViT-XXS + image AE | 2,700,147 | 1.81× | 1.6602 | **4.03×** | exceeds preferred; not hard-rejected on FLOPs |
+| **C2** MobileViT-XXS + slim feature AE | 2,544,634 | 1.71× | 0.9789 | **2.38×** | within preferred FLOPs |
+| **C3** EfficientViT-B0 + slim feature AE | 2,263,930 | 1.52× | 0.6565 | **1.60×** | within preferred FLOPs |
 
 Preferred: params ≤ ~3 M, GFLOPs ≤ 3×, latency ≤ 3×. Hard reject: GFLOPs > 5× or latency > 5×.
+The latency criterion is **batch-size-1 mean** latency (amendment §A1).
 
 ### The finding that matters most
 
 **Replacing ViT-B/16 is necessary but not sufficient.** C1 swaps the 85.8 M
-transformer for a 0.95 M one and is *still hard-rejected* at 7.31× — because the
-image-space auto-encoder alone contributes ≈2.06 GFLOPs, a 5.0× floor on only
-259 K parameters. Moving the AE to feature space drops it to ≈0.20 GFLOPs, a
-**10.3× reduction**, and that single change is what carries C1 → C2 across the
-threshold.
+transformer for a 0.95 M one and still lands at 4.03× — outside the ≤3× preferred
+band — because the image-space auto-encoder alone contributes **0.7349 GFLOPs**
+(measured on the AE submodule), a **1.79× floor** on only 259 K parameters, before
+the classifier or the encoder runs. Moving the AE to feature space drops it to
+**0.0536 GFLOPs**, a **13.7× reduction**, and that single change is what carries
+C1 → C2 inside the preferred band.
 
 The auto-encoder's *operating space*, not the transformer's *size*, is the
 binding constraint once the ViT is gone. Parameter count conceals this completely:
-C1 and C2 differ by 6% in parameters and by **167%** in FLOPs.
+C1 and C2 differ by 6 % in parameters and by **70 %** in FLOPs.
+
+**Correction to the earlier reading.** Under the defective FLOPs handler C1
+appeared *hard-rejected* at 7.31×. It is not: at 4.03× it exceeds the preferred
+band but clears the 5× hard-reject threshold. C1 was excluded from the T4 run, so
+it has **no measured latency**, and it is not resurrected as a candidate here —
+but the specific claim "C1 is hard-rejected" was an artifact of the defect and is
+withdrawn.
 
 ---
 
@@ -64,17 +81,18 @@ Identical for every candidate, including the baseline.
 | Synchronisation | `torch.cuda.synchronize()` around every timed region |
 | AMP | identical across candidates (default: off, matching the training protocol) |
 | Classifier | YOLOv8n-cls, unmodified, in all five rows |
-| FLOPs convention | 2 × MACs, via `thop`, traced on CPU for device-independence |
+| FLOPs convention | 2 × MACs, via `thop` on CPU, **with thop's transposed-convolution handler overridden** (amendment §A2) |
 
 **Parameters, tensor shapes and interfaces are hardware-independent and final.**
 Latency, throughput and peak GPU memory were **measured on a Tesla T4 on
 16 Aug 2026** — see §8.
 
-⚠ **The FLOPs convention above is defective.** `thop` over-counts
-`ConvTranspose2d` by stride², inflating every auto-encoder-bearing row. Corrected
-figures are in §8; the derivation and empirical verification are in
-`PROTOCOL_AMENDMENT_2026-08-16.md` §A2. The uncorrected values are retained
-throughout §1–§7 as the historical record.
+**FLOPs figures throughout this document are the corrected ones.** Stock `thop`
+over-counts `ConvTranspose2d` by stride², inflating every auto-encoder-bearing
+row; `count_flops` now overrides that handler. The derivation and its empirical
+verification are in `PROTOCOL_AMENDMENT_2026-08-16.md` §A2, and the
+pre-correction values are preserved in §8 and in
+`docs/evidence/2026-08-16_t4_benchmark_raw.json`.
 
 ---
 
@@ -96,14 +114,14 @@ throughout §1–§7 as the historical record.
 | | |
 |---|---|
 | Total / trainable params | 87,549,123 / 1,750,467 |
-| GFLOPs (MACs) | 36.2215 (18.1107 G) |
+| GFLOPs (MACs) | 34.8731 (17.4366 G) |
 | Model size | 334.58 MB |
 | Transformer | `google/vit-base-patch16-224-in21k`, **frozen**, 768-d tokens |
 | AE space | **image** |
 | Interface | `PE-RGB [B,3,224,224] ⊕ TF-RGB [B,3,224,224] → [B,6,224,224] → AE → latent [B,128,28,28] → recon [B,3,224,224] → YOLO` |
 | Classifier stem | unmodified (3 ch) |
 
-**Hard reject at 88.00× baseline FLOPs.** Also 1.60× the FLOPs of plain ViT-B/16
+**84.73× baseline FLOPs.** Also 1.55× the FLOPs of plain ViT-B/16
 used directly as a classifier (22.571 GFLOPs) — the pipeline costs more than the
 transformer inside it.
 
@@ -112,37 +130,40 @@ transformer inside it.
 | | |
 |---|---|
 | Total / trainable params | 2,700,147 / 1,749,123 |
-| GFLOPs (MACs) | 3.0087 (1.5044 G) |
+| GFLOPs (MACs) | 1.6602 (0.8301 G) |
 | Model size | 10.92 MB |
 | Transformer | `mobilevit_xxs` (timm, ImageNet), **frozen**, 320-ch grid at 7×7 |
 | AE space | **image** |
 | Interface | `PE-RGB [B,3,224,224] ⊕ TF-RGB [B,3,224,224] → [B,6,224,224] → AE → latent [B,128,28,28] → recon [B,3,224,224] → YOLO` |
 | Classifier stem | unmodified (3 ch) |
 
-**Hard reject at 7.31× baseline FLOPs**, despite passing the parameter target at
-1.81×. The image-space AE contributes ≈2.06 of the 3.01 GFLOPs — **68% of the
-total cost sits in a 259 K-parameter module.**
+**4.03× baseline FLOPs** — outside the ≤3× preferred band but *not*
+hard-rejected — despite passing the parameter target at 1.81×. The image-space AE
+contributes **0.7349 of the 1.6602 GFLOPs** — **44 % of the total cost sits in a
+259 K-parameter module.** C1 has no measured latency; it was not in the T4 run.
 
 ### C2 — MobileViT-XXS + slim feature-space AE  ← recommended on cost
 
 | | |
 |---|---|
-| Total / trainable params | 2,545,603 / 1,594,579 |
-| GFLOPs (MACs) | 1.1279 (0.5640 G) |
+| Total / trainable params | 2,544,634 / 1,593,610 |
+| GFLOPs (MACs) | 0.9789 (0.4895 G) |
 | Model size | 10.33 MB |
 | Transformer | `mobilevit_xxs` (timm, ImageNet), **frozen**, 320-ch grid at 7×7 |
 | AE space | **feature** |
 | Interface | `PE-RGB [B,3,224,224] --avgpool--> [B,3,7,7] ⊕ backbone [B,320,7,7] → [B,323,7,7] → AE encoder → latent [B,64,7,7] → decoder ×32 → recon [B,3,224,224] → YOLO` |
 | Classifier stem | unmodified (3 ch) |
 
-Meets both measurable preferred targets: 1.71× params, 2.74× FLOPs.
+Meets both hardware-independent preferred targets: 1.71× params, 2.38× FLOPs.
+**Measured on the T4 it is 8.028× baseline at batch 1** — hard-rejected on the
+primary deployment metric. Cost-model rank and measured rank disagree sharply.
 
 ### C3 — EfficientViT-B0 + slim feature-space AE
 
 | | |
 |---|---|
-| Total / trainable params | 2,264,323 / 1,581,715 |
-| GFLOPs (MACs) | 0.8055 (0.4028 G) |
+| Total / trainable params | 2,263,930 / 1,581,322 |
+| GFLOPs (MACs) | 0.6565 (0.3283 G) |
 | Model size | 9.25 MB |
 | Transformer | `efficientvit_b0` (timm, ImageNet), **frozen**, 128-ch grid at 7×7 |
 | AE space | **feature** |
@@ -176,8 +197,8 @@ trainable count is what the optimiser actually updates:
 | BASELINE | 1,488,247 | 1,488,247 | 0 | — |
 | C0 | 87,549,123 | 1,750,467 | 85,798,656 | frozen |
 | C1 | 2,700,147 | 1,749,123 | 951,024 | frozen |
-| C2 | 2,545,603 | 1,594,579 | 951,024 | frozen |
-| C3 | 2,264,323 | 1,581,715 | 682,608 | frozen |
+| C2 | 2,544,634 | 1,593,610 | 951,024 | frozen |
+| C3 | 2,263,930 | 1,581,322 | 682,608 | frozen |
 
 Trainable counts sit near the 1.49 M baseline throughout, so training-step cost is
 dominated by the frozen forward pass — which is exactly what Option A's feature
@@ -235,7 +256,7 @@ inconsistency rather than changing a method.
 
 > **This is a real cost of C3 over C2.** C2 preserves Eq. (4); C3 invalidates it.
 > Since C2 already meets the preferred target, C3's marginal FLOPs saving
-> (1.96× vs 2.74×) does not obviously justify rewriting the attention equation.
+> (1.60× vs 2.38× corrected) does not obviously justify rewriting the attention equation.
 
 ### Figure 2
 
@@ -355,23 +376,30 @@ candidate at batch 1.
 **The `verdict` field in `t4_benchmark.json` must not be quoted** until §A1 is
 resolved. The latency measurements above are unaffected and stand.
 
-### Corrected FLOPs — **[DERIVED]**, see amendment §A2
+### Raw vs corrected provenance — **both preserved**
 
-`thop`'s transposed-convolution over-count was verified empirically against
-ground truth. Corrected, uniformly, for every candidate:
+The raw JSON records the figures produced by the defective handler. It is
+**immutable evidence and has not been edited**; the corrected values are what the
+documentation uses. Both are shown here so either can be traced.
 
-| Candidate | GFLOPs as reported | × base | GFLOPs corrected | × base |
-|---|---|---|---|---|
-| BASELINE | 0.4116 | 1.000 | 0.4116 | 1.000 |
-| C0 = Original AE-TFPE | 36.2215 | 88.00× | **34.8728** | **84.73×** |
-| C2-7 | 1.1279 | 2.740× | **0.9786** | **2.378×** |
-| C2-14 | 1.3896 | 3.376× | **1.0043** | **2.440×** |
-| C2-28 | 1.8215 | 4.425× | **1.0123** | **2.459×** |
+| Candidate | GFLOPs **raw** (in the JSON) | × base | GFLOPs **corrected** (docs) | × base | Params raw | Params corrected |
+|---|---|---|---|---|---|---|
+| BASELINE | 0.4116 | 1.000 | 0.4116 | 1.000 | 1,488,247 | 1,488,247 |
+| C0 = Original AE-TFPE | 36.2215 | 88.002 | **34.8731** | **84.726** | 87,549,123 | 87,549,123 |
+| `C2` = C2-7 | 1.1279 | 2.740 | **0.9789** | **2.378** | 2,545,603 | **2,544,634** |
+| C2-14 | 1.3896 | 3.376 | **1.0046** | **2.441** | 2,067,091 | **2,066,890** |
+| C2-28 | 1.8215 | 4.425 | **1.0126** | **2.460** | 1,716,739 | **1,716,586** |
+
+Parameter differences are the dead projection-head parameters removed under
+amendment §A4 (969 / 201 / 153). **No output changed**: logits, front-end tensors
+and AE latents are bit-identical before and after, verified by weight transfer so
+the comparison isolates computation from initialisation RNG.
 
 The three grids are **near-identical in FLOPs** (2.38 / 2.44 / 2.46) once the
-over-count is removed. FLOPs do not separate them; measured BS1 latency does.
-Any argument in `ARCHITECTURE_V2_SPATIAL_TRADEOFF.md` that rests on the
-2.74 → 3.38 → 4.43 progression must be rewritten.
+over-count is removed. FLOPs do not separate them; measured BS1 latency does
+(8.028× / 4.868× / 3.034×). Any argument in
+`ARCHITECTURE_V2_SPATIAL_TRADEOFF.md` that rested on the 2.74 → 3.38 → 4.43
+progression has been rewritten accordingly.
 
 ---
 
@@ -383,8 +411,8 @@ criterion:
 
 | Criterion | Measured | Classification |
 |---|---|---|
-| **Parameters** | 1,716,739 · 1.15× baseline · ≤ 3 M | **PREFERRED** |
-| **FLOPs** | 4.425× as reported, **2.459× corrected** | **CONDITIONAL** — depends on adopting §A2 |
+| **Parameters** | **1,716,586** · 1.15× baseline · ≤ 3 M | **PREFERRED** |
+| **FLOPs** | **2.460× corrected** (4.425× under the defective handler) | **PREFERRED** — inside the ≤3× band |
 | **BS1 latency** *(primary)* | 10.2045 ms · **3.034× mean, 2.923× median** vs a 3.0× threshold | **INDETERMINATE** — mean and median straddle the threshold (§A5) |
 | **BS32 throughput** *(secondary)* | 5.635× per-image · 774.78 vs 4365.58 img/s | **SUBSTANTIAL OVERHEAD** relative to baseline |
 | **Model size** | 7.156 MB · 1.255× baseline | preferred |
@@ -422,8 +450,8 @@ and the 16 frozen arms remain byte-identical.
 ### Superseded pre-T4 recommendation *(kept for the audit trail)*
 
 > Per the frozen decision rules: C2 — it meets the preferred target on both
-> measurable criteria (1.71× params, 2.74× FLOPs). C3 is cheaper still (1.52× /
-> 1.96×) but requires rewriting Eq. (4) for linear attention. Option B is not
+> measurable criteria (1.71× params, 2.74× FLOPs as then computed). C3 is cheaper
+> still but requires rewriting Eq. (4) for linear attention. Option B is not
 > triggered.
 
 That recommendation was reached **before** any latency existed, and on FLOPs that

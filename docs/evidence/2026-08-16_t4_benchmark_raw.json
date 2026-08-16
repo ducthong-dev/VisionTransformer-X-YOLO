@@ -1,0 +1,704 @@
+{
+  "device": "cuda",
+  "timings_reportable": true,
+  "amp": false,
+  "img_size": 224,
+  "batch_sizes": [
+    1,
+    32
+  ],
+  "warmup_iters": 50,
+  "timed_iters": 200,
+  "decision_rules": {
+    "preferred_params_max": 3000000,
+    "preferred_gflops_ratio_max": 3.0,
+    "preferred_latency_ratio_max": 3.0,
+    "reject_gflops_ratio_above": 5.0,
+    "reject_latency_ratio_above": 5.0
+  },
+  "hardware": {
+    "device": "cuda",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+    "processor": "x86_64",
+    "torch": "2.11.0+cu128",
+    "gpu": "Tesla T4",
+    "cuda": "12.8",
+    "timings_reportable": true,
+    "timing_note": "CUDA device: latency and throughput are reportable."
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "torch": "2.11.0+cu128",
+    "cuda_available": true,
+    "mps_available": false,
+    "git_commit": "3d5f1c424da9107b321bb304a04d6f7db8b31d74",
+    "git_dirty": false
+  },
+  "candidates": [
+    {
+      "candidate": "BASELINE",
+      "label": "YOLOv8n-cls only (reference)",
+      "config": {
+        "use_pe": false,
+        "use_tf": false,
+        "use_ae": false,
+        "fusion": "identity"
+      },
+      "params_total": 1488247,
+      "params_trainable": 1488247,
+      "params_frozen": 0,
+      "model_size_mb": 5.703,
+      "img_size": 224,
+      "macs": 205785344.0,
+      "gflops": 0.4116,
+      "thop_buffers_removed": 90,
+      "macs_g": 0.2058,
+      "device_audit": {
+        "parameter_devices": [
+          "cuda:0"
+        ],
+        "buffer_devices": [
+          "cuda:0"
+        ],
+        "n_parameters": 80,
+        "n_buffers": 78,
+        "unregistered_tensor_attrs": [
+          {
+            "module": "classifier",
+            "attr": "stride",
+            "device": "cpu",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "target_device": "cuda:0",
+        "verified": true
+      },
+      "shapes": {
+        "input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "fused_pre_ae": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "ae_latent": null,
+        "classifier_input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "logits": [
+          2,
+          39
+        ],
+        "classifier_input_range": [
+          0.0,
+          1.0
+        ]
+      },
+      "interface": {
+        "transformer": null,
+        "autoencoder": null,
+        "ae_space": null,
+        "classifier_in_channels": 3,
+        "classifier_stem_modified": false
+      },
+      "latency": {
+        "1": {
+          "batch_size": 1,
+          "latency_ms_mean": 3.3632,
+          "latency_ms_std": 0.4881,
+          "latency_ms_median": 3.2168,
+          "latency_ms_per_image": 3.36317,
+          "throughput_img_per_s": 297.34,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 41.61
+        },
+        "32": {
+          "batch_size": 32,
+          "latency_ms_mean": 7.3301,
+          "latency_ms_std": 0.107,
+          "latency_ms_median": 7.3019,
+          "latency_ms_per_image": 0.22906,
+          "throughput_img_per_s": 4365.58,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 130.61
+        }
+      },
+      "vs_baseline": {
+        "params_ratio": 1.0,
+        "gflops_ratio": 1.0,
+        "latency_ratio_bs1": 1.0,
+        "latency_ratio_bs32": 1.0
+      },
+      "verdict": {
+        "hard_reject": false,
+        "meets_preferred": true,
+        "latency_criterion_evaluated": true
+      }
+    },
+    {
+      "candidate": "C0",
+      "label": "ViT-B/16 + image-space AE + YOLOv8n-cls  (current A5, frozen v1)",
+      "config": {
+        "use_pe": true,
+        "use_tf": true,
+        "use_ae": true,
+        "fusion": "linear"
+      },
+      "params_total": 87549123,
+      "params_trainable": 1750467,
+      "params_frozen": 85798656,
+      "model_size_mb": 334.576,
+      "img_size": 224,
+      "macs": 18110755376.0,
+      "gflops": 36.2215,
+      "thop_buffers_removed": 202,
+      "macs_g": 18.1108,
+      "device_audit": {
+        "parameter_devices": [
+          "cuda:0"
+        ],
+        "buffer_devices": [
+          "cuda:0"
+        ],
+        "n_parameters": 299,
+        "n_buffers": 99,
+        "unregistered_tensor_attrs": [
+          {
+            "module": "classifier",
+            "attr": "stride",
+            "device": "cpu",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "target_device": "cuda:0",
+        "verified": true
+      },
+      "shapes": {
+        "input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "fused_pre_ae": [
+          2,
+          6,
+          224,
+          224
+        ],
+        "ae_latent": [
+          2,
+          128,
+          28,
+          28
+        ],
+        "classifier_input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "logits": [
+          2,
+          39
+        ],
+        "classifier_input_range": [
+          0.4528,
+          0.5557
+        ]
+      },
+      "interface": {
+        "transformer": {
+          "name": "google/vit-base-patch16-224-in21k",
+          "library": "transformers.ViTModel",
+          "frozen": true,
+          "grid_channels": 768
+        },
+        "autoencoder": {
+          "type": "stacked sparse denoising auto-encoder",
+          "in_channels": 6,
+          "encoder": "3 x [Conv3x3 s2 - BN - ReLU/Sigmoid], 224->112->56->28",
+          "decoder": "3 x [ConvT4x4 s2 - BN - ReLU/Sigmoid], 28->56->112->224",
+          "latent_shape": [
+            128,
+            28,
+            28
+          ],
+          "latent_dim": 100352,
+          "latent_activation": "sigmoid",
+          "output_activation": "sigmoid"
+        },
+        "ae_space": "image",
+        "classifier_in_channels": 3,
+        "classifier_stem_modified": false
+      },
+      "latency": {
+        "1": {
+          "batch_size": 1,
+          "latency_ms_mean": 28.5088,
+          "latency_ms_std": 8.5585,
+          "latency_ms_median": 23.5584,
+          "latency_ms_per_image": 28.50883,
+          "throughput_img_per_s": 35.08,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 378.12
+        },
+        "32": {
+          "batch_size": 32,
+          "latency_ms_mean": 344.7599,
+          "latency_ms_std": 9.2733,
+          "latency_ms_median": 343.5652,
+          "latency_ms_per_image": 10.77375,
+          "throughput_img_per_s": 92.82,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 646.25
+        }
+      },
+      "vs_baseline": {
+        "params_ratio": 58.827,
+        "gflops_ratio": 88.002,
+        "latency_ratio_bs1": 8.477,
+        "latency_ratio_bs32": 47.033
+      },
+      "verdict": {
+        "hard_reject": true,
+        "meets_preferred": false,
+        "latency_criterion_evaluated": true
+      }
+    },
+    {
+      "candidate": "C2",
+      "label": "MobileViT-XXS stage4 (7x7) + slim feature-space AE + YOLOv8n-cls",
+      "config": {
+        "use_pe": true,
+        "use_tf": true,
+        "use_ae": true,
+        "fusion": "linear",
+        "tf_backbone": "mobilevit_xxs",
+        "ae_space": "feature"
+      },
+      "params_total": 2545603,
+      "params_trainable": 1594579,
+      "params_frozen": 951024,
+      "model_size_mb": 10.328,
+      "img_size": 224,
+      "macs": 563941056.0,
+      "gflops": 1.1279,
+      "thop_buffers_removed": 668,
+      "macs_g": 0.5639,
+      "device_audit": {
+        "parameter_devices": [
+          "cuda:0"
+        ],
+        "buffer_devices": [
+          "cuda:0"
+        ],
+        "n_parameters": 314,
+        "n_buffers": 195,
+        "unregistered_tensor_attrs": [
+          {
+            "module": "classifier",
+            "attr": "stride",
+            "device": "cpu",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "target_device": "cuda:0",
+        "verified": true
+      },
+      "shapes": {
+        "input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "fused_pre_ae": [
+          2,
+          323,
+          7,
+          7
+        ],
+        "ae_latent": [
+          2,
+          64,
+          7,
+          7
+        ],
+        "classifier_input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "logits": [
+          2,
+          39
+        ],
+        "classifier_input_range": [
+          0.4939,
+          0.5313
+        ]
+      },
+      "interface": {
+        "transformer": {
+          "name": "mobilevit_xxs",
+          "library": "timm (features_only)",
+          "frozen": true,
+          "grid_channels": 320
+        },
+        "autoencoder": {
+          "type": "slim feature-space sparse denoising auto-encoder",
+          "in_channels": 323,
+          "encoder": "Conv1x1 -> BN -> Sigmoid at 7x7 (no spatial reduction)",
+          "decoder": "3 x [ConvT4x4 s2], 7 -> 224",
+          "latent_shape": [
+            64,
+            7,
+            7
+          ],
+          "latent_dim": 3136,
+          "latent_activation": "sigmoid",
+          "output_activation": "sigmoid",
+          "operates_on": "intermediate feature representation (consistent with manuscript 5.1/5.3)"
+        },
+        "ae_space": "feature",
+        "classifier_in_channels": 3,
+        "classifier_stem_modified": false
+      },
+      "latency": {
+        "1": {
+          "batch_size": 1,
+          "latency_ms_mean": 27.0,
+          "latency_ms_std": 6.7475,
+          "latency_ms_median": 28.5828,
+          "latency_ms_per_image": 27.00001,
+          "throughput_img_per_s": 37.04,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 50.53
+        },
+        "32": {
+          "batch_size": 32,
+          "latency_ms_mean": 39.4217,
+          "latency_ms_std": 0.7696,
+          "latency_ms_median": 39.3787,
+          "latency_ms_per_image": 1.23193,
+          "throughput_img_per_s": 811.74,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 273.07
+        }
+      },
+      "vs_baseline": {
+        "params_ratio": 1.71,
+        "gflops_ratio": 2.74,
+        "latency_ratio_bs1": 8.028,
+        "latency_ratio_bs32": 5.378
+      },
+      "verdict": {
+        "hard_reject": true,
+        "meets_preferred": false,
+        "latency_criterion_evaluated": true
+      }
+    },
+    {
+      "candidate": "C2-14",
+      "label": "MobileViT-XXS stage3 (14x14) + slim feature-space AE + YOLOv8n-cls",
+      "config": {
+        "use_pe": true,
+        "use_tf": true,
+        "use_ae": true,
+        "fusion": "linear",
+        "tf_backbone": "mobilevit_xxs",
+        "ae_space": "feature",
+        "tf_stage": 3
+      },
+      "params_total": 2067091,
+      "params_trainable": 1575747,
+      "params_frozen": 491344,
+      "model_size_mb": 8.496,
+      "img_size": 224,
+      "macs": 694806912.0,
+      "gflops": 1.3896,
+      "thop_buffers_removed": 526,
+      "macs_g": 0.6948,
+      "device_audit": {
+        "parameter_devices": [
+          "cuda:0"
+        ],
+        "buffer_devices": [
+          "cuda:0"
+        ],
+        "n_parameters": 251,
+        "n_buffers": 171,
+        "unregistered_tensor_attrs": [
+          {
+            "module": "classifier",
+            "attr": "stride",
+            "device": "cpu",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "target_device": "cuda:0",
+        "verified": true
+      },
+      "shapes": {
+        "input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "fused_pre_ae": [
+          2,
+          67,
+          14,
+          14
+        ],
+        "ae_latent": [
+          2,
+          64,
+          14,
+          14
+        ],
+        "classifier_input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "logits": [
+          2,
+          39
+        ],
+        "classifier_input_range": [
+          0.4928,
+          0.5225
+        ]
+      },
+      "interface": {
+        "transformer": {
+          "name": "mobilevit_xxs",
+          "library": "timm (features_only)",
+          "frozen": true,
+          "grid_channels": 64
+        },
+        "autoencoder": {
+          "type": "slim feature-space sparse denoising auto-encoder",
+          "in_channels": 67,
+          "encoder": "Conv1x1 -> BN -> Sigmoid at 14x14 (no spatial reduction)",
+          "decoder": "2 x [ConvT4x4 s2], 14 -> 224",
+          "latent_shape": [
+            64,
+            14,
+            14
+          ],
+          "latent_dim": 12544,
+          "latent_activation": "sigmoid",
+          "output_activation": "sigmoid",
+          "operates_on": "intermediate feature representation (consistent with manuscript 5.1/5.3)"
+        },
+        "ae_space": "feature",
+        "classifier_in_channels": 3,
+        "classifier_stem_modified": false
+      },
+      "latency": {
+        "1": {
+          "batch_size": 1,
+          "latency_ms_mean": 16.3708,
+          "latency_ms_std": 4.4528,
+          "latency_ms_median": 14.1832,
+          "latency_ms_per_image": 16.37075,
+          "throughput_img_per_s": 61.08,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 58.54
+        },
+        "32": {
+          "batch_size": 32,
+          "latency_ms_mean": 39.2333,
+          "latency_ms_std": 0.3502,
+          "latency_ms_median": 39.1881,
+          "latency_ms_per_image": 1.22604,
+          "throughput_img_per_s": 815.63,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 281.09
+        }
+      },
+      "vs_baseline": {
+        "params_ratio": 1.389,
+        "gflops_ratio": 3.376,
+        "latency_ratio_bs1": 4.868,
+        "latency_ratio_bs32": 5.352
+      },
+      "verdict": {
+        "hard_reject": false,
+        "meets_preferred": false,
+        "latency_criterion_evaluated": true
+      }
+    },
+    {
+      "candidate": "C2-28",
+      "label": "MobileViT-XXS stage2 (28x28) + slim feature-space AE + YOLOv8n-cls",
+      "config": {
+        "use_pe": true,
+        "use_tf": true,
+        "use_ae": true,
+        "fusion": "linear",
+        "tf_backbone": "mobilevit_xxs",
+        "ae_space": "feature",
+        "tf_stage": 2
+      },
+      "params_total": 1716739,
+      "params_trainable": 1567219,
+      "params_frozen": 149520,
+      "model_size_mb": 7.156,
+      "img_size": 224,
+      "macs": 910745600.0,
+      "gflops": 1.8215,
+      "thop_buffers_removed": 368,
+      "macs_g": 0.9107,
+      "device_audit": {
+        "parameter_devices": [
+          "cuda:0"
+        ],
+        "buffer_devices": [
+          "cuda:0"
+        ],
+        "n_parameters": 179,
+        "n_buffers": 150,
+        "unregistered_tensor_attrs": [
+          {
+            "module": "classifier",
+            "attr": "stride",
+            "device": "cpu",
+            "shape": [
+              1
+            ]
+          }
+        ],
+        "target_device": "cuda:0",
+        "verified": true
+      },
+      "shapes": {
+        "input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "fused_pre_ae": [
+          2,
+          51,
+          28,
+          28
+        ],
+        "ae_latent": [
+          2,
+          64,
+          28,
+          28
+        ],
+        "classifier_input": [
+          2,
+          3,
+          224,
+          224
+        ],
+        "logits": [
+          2,
+          39
+        ],
+        "classifier_input_range": [
+          0.4779,
+          0.5603
+        ]
+      },
+      "interface": {
+        "transformer": {
+          "name": "mobilevit_xxs",
+          "library": "timm (features_only)",
+          "frozen": true,
+          "grid_channels": 48
+        },
+        "autoencoder": {
+          "type": "slim feature-space sparse denoising auto-encoder",
+          "in_channels": 51,
+          "encoder": "Conv1x1 -> BN -> Sigmoid at 28x28 (no spatial reduction)",
+          "decoder": "2 x [ConvT4x4 s2], 28 -> 224",
+          "latent_shape": [
+            64,
+            28,
+            28
+          ],
+          "latent_dim": 50176,
+          "latent_activation": "sigmoid",
+          "output_activation": "sigmoid",
+          "operates_on": "intermediate feature representation (consistent with manuscript 5.1/5.3)"
+        },
+        "ae_space": "feature",
+        "classifier_in_channels": 3,
+        "classifier_stem_modified": false
+      },
+      "latency": {
+        "1": {
+          "batch_size": 1,
+          "latency_ms_mean": 10.2045,
+          "latency_ms_std": 2.0407,
+          "latency_ms_median": 9.4031,
+          "latency_ms_per_image": 10.20454,
+          "throughput_img_per_s": 98.0,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 65.21
+        },
+        "32": {
+          "batch_size": 32,
+          "latency_ms_mean": 41.302,
+          "latency_ms_std": 0.3652,
+          "latency_ms_median": 41.3051,
+          "latency_ms_per_image": 1.29069,
+          "throughput_img_per_s": 774.78,
+          "warmup_iters": 50,
+          "timed_iters": 200,
+          "peak_gpu_mem_mb": 287.75
+        }
+      },
+      "vs_baseline": {
+        "params_ratio": 1.154,
+        "gflops_ratio": 4.425,
+        "latency_ratio_bs1": 3.034,
+        "latency_ratio_bs32": 5.635
+      },
+      "verdict": {
+        "hard_reject": false,
+        "meets_preferred": false,
+        "latency_criterion_evaluated": true
+      }
+    }
+  ]
+}

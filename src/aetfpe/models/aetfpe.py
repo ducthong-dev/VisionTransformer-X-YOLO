@@ -114,6 +114,12 @@ class AETFPE(nn.Module):
             if cfg.use_pe
             else None
         )
+        # The feature-space path consumes the backbone's raw grid via
+        # forward_features(), so the encoder's image-space projection head is never
+        # executed. Building it anyway leaves dead parameters; see
+        # scripts/prove_dead_parameters.py.
+        feature_space = cfg.use_ae and cfg.ae_space == "feature"
+
         if not cfg.use_tf:
             self.tf = None
         elif cfg.tf_backbone:
@@ -125,6 +131,7 @@ class AETFPE(nn.Module):
                 freeze=cfg.vit_frozen,
                 pretrained=cfg.vit_pretrained,
                 out_index=cfg.tf_stage,
+                image_space_head=not feature_space,
             )
         else:
             self.tf = TransformerFeatureRGB(

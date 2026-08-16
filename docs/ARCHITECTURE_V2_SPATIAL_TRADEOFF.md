@@ -56,12 +56,19 @@ python scripts/benchmark_architectures.py --device cuda --pretrained \
 | | Total params | Trainable | GFLOPs |
 |---|---|---|---|
 | BASELINE | 1,488,247 | 1,488,247 | 0.4116 |
-| C2-7 | 2,545,603 | 1,594,579 | 1.1279 |
-| C2-14 | 2,067,091 | 1,575,747 | 1.3896 |
-| C2-28 | 1,716,739 | 1,567,219 | 1.8215 |
-| C3 | 2,264,323 | 1,581,715 | 0.8055 |
+| C2-7 | 2,544,634 | 1,593,610 | 0.9789 |
+| C2-14 | 2,066,890 | 1,575,546 | 1.0046 |
+| C2-28 | 1,716,586 | 1,567,066 | 1.0126 |
+| C3 | 2,263,930 | 1,581,322 | 0.6565 |
 
-**[NOT YET TESTED]** latency b=1, latency b=32, throughput, peak CUDA memory.
+> **Corrected 16 Aug 2026.** FLOPs use the fixed transposed-convolution handler
+> and parameters exclude the removed dead projection head (amendment §A2/§A4).
+> No output changed. Pre-correction values are in
+> `ARCHITECTURE_V2_BENCHMARK.md` §8.
+
+**[MEASURED] on Tesla T4, 16 Aug 2026** — batch-1 mean latency:
+BASELINE 3.3632 ms · C2-7 **27.0000 ms (8.028×)** · C2-14 **16.3708 ms (4.868×)**
+· C2-28 **10.2045 ms (3.034×)**.
 
 **[HYPOTHESIS]** MobileViT is memory-bandwidth-bound and historically
 under-performs its FLOP count on a T4, so a candidate passing on FLOPs may still
@@ -151,9 +158,9 @@ are all held fixed across C2-7 / C2-14 / C2-28. **Only the source stage changes*
 so the comparison isolates spatial resolution. No new attention mechanism was
 added; no classifier was redesigned; PE was not modified.
 
-**[MEASURED]** C2-28's latent grid (28×28) equals the latent grid of the rejected
-C0/C1 (`StackedSparseDenoisingAE`, latent `[128,28,28]`) — at **1.8215 GFLOPs
-versus C1's 3.0087**, i.e. the same spatial ceiling for 60% of the cost.
+**[MEASURED]** C2-28's latent grid (28×28) equals the latent grid of
+C0/C1 (`StackedSparseDenoisingAE`, latent `[128,28,28]`) — at **1.0126 GFLOPs
+versus C1's 1.6602**, i.e. the same spatial ceiling for 61 % of the cost.
 
 ---
 
@@ -162,11 +169,27 @@ versus C1's 3.0087**, i.e. the same spatial ceiling for 60% of the cost.
 | Candidate | Params | ×base | Trainable | GFLOPs | ×base | FLOPs band |
 |---|---|---|---|---|---|---|
 | BASELINE | 1,488,247 | 1.00× | 1,488,247 | 0.4116 | 1.00× | — |
-| **C2-7** | 2,545,603 | 1.71× | 1,594,579 | 1.1279 | **2.74×** | **Preferred** |
-| **C2-14** | 2,067,091 | 1.39× | 1,575,747 | 1.3896 | **3.38×** | **Conditional** |
-| **C2-28** | 1,716,739 | **1.15×** | 1,567,219 | 1.8215 | **4.43×** | **Conditional** |
+| **C2-7** | 2,544,634 | 1.71× | 1,593,610 | 0.9789 | **2.38×** | Preferred on FLOPs |
+| **C2-14** | 2,066,890 | 1.39× | 1,575,546 | 1.0046 | **2.44×** | Preferred on FLOPs |
+| **C2-28** | 1,716,586 | **1.15×** | 1,567,066 | 1.0126 | **2.46×** | Preferred on FLOPs |
 
-None is hard-rejected (>5×).
+**FLOPs no longer separate these three architectures.** Once the transposed-
+convolution over-count is removed they are within 3 % of each other
+(2.38 / 2.44 / 2.46) — the apparent 2.74 → 3.38 → 4.43 progression was an
+artifact of the defective handler, and **any argument that rested on it is
+withdrawn**.
+
+What separates them is measured batch-1 latency on the T4, and it runs the
+*opposite* way to the old FLOPs story:
+
+| Candidate | GFLOPs ×base | **T4 BS1 latency ×base** |
+|---|---|---|
+| C2-7 | 2.38× | **8.028×** — hard reject |
+| C2-14 | 2.44× | **4.868×** |
+| C2-28 | 2.46× | **3.034×** — cheapest measured |
+
+The candidate with the *most* FLOPs is by far the *fastest*. None is hard-rejected
+on FLOPs; C2-7 is hard-rejected on measured batch-1 latency.
 
 ### Where the cost sits · **[DERIVED]**
 
@@ -235,9 +258,9 @@ is geometry, not statistics, and it does not depend on channel count.
 
 | Candidate | Grid | Cell | Params | ×P | GFLOPs | ×F | T4 latency ratio | PSNR floor | SSIM floor | Lesion preservation | Verdict |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **C2-7** | 7×7 | 32 px | 2,545,603 | 1.71× | 1.1279 | **2.74×** *(Preferred)* | **[NOT YET TESTED]** | 20.04 | 0.383 | **None** — spots, boundaries, texture all lost | Cheapest; information-inadequate |
-| **C2-14** | 14×14 | 16 px | 2,067,091 | 1.39× | 1.3896 | **3.38×** *(Conditional)* | **[NOT YET TESTED]** | 22.05 | 0.409 | **Marginal** — smudges, no localisation | Neither cheap nor sufficient |
-| **C2-28** | 28×28 | 8 px | 1,716,739 | **1.15×** | 1.8215 | **4.43×** *(Conditional)* | **[NOT YET TESTED]** | 24.09 | 0.462 | **Yes** — spots, boundaries, veins | **Recommended, conditionally** |
+| **C2-7** | 7×7 | 32 px | 2,544,634 | 1.71× | 0.9789 | **2.38×** | **8.028×** | 20.04 | 0.383 | **None** — spots, boundaries, texture all lost | Slowest measured *and* information-inadequate |
+| **C2-14** | 14×14 | 16 px | 2,066,890 | 1.39× | 1.0046 | **2.44×** | **4.868×** | 22.05 | 0.409 | **Marginal** — smudges, no localisation | Neither fast nor sufficient |
+| **C2-28** | 28×28 | 8 px | 1,716,586 | **1.15×** | 1.0126 | **2.46×** | **3.034×** | 24.09 | 0.462 | **Yes** — spots, boundaries, veins | **Leading candidate, conditional** |
 | **Option B** | n/a | n/a | 1,488,247 | **1.00×** | 0.4116 | **1.00×** | 1.00× by construction | n/a | n/a | n/a — no inference-time AE | Fallback; strongest on cost, weakest on reviewer fit |
 
 ### Applying the pre-registered preference order
@@ -373,8 +396,12 @@ does so at **1.15× baseline parameters**, the lowest of the three.
 **Why not C2-7:** at a 32×32 px cell footprint, lesions 2–6× smaller than one cell
 are unrepresentable. Cheapest and information-inadequate.
 
-**Why not C2-14:** dominated. More expensive than C2-7 (3.38× vs 2.74×) while still
-failing to localise lesions (+0.026 SSIM). It sits on no useful part of the frontier.
+**Why not C2-14:** dominated. It is FLOPs-equivalent to both others (2.44× vs
+2.38× / 2.46×), slower than C2-28 on the T4 (4.868× vs 3.034×), and still fails to
+localise lesions (+0.026 SSIM). It sits on no useful part of the frontier.
+*(The original reasoning — that C2-14 was more expensive than C2-7 in FLOPs — was
+based on the defective handler. The conclusion survives; the reason has changed to
+measured latency.)*
 
 **Why not Option B yet:** rule 4 triggers only if no feature-space candidate is
 defensible. C2-28 is defensible under rule 2. **[HYPOTHESIS]** Option B remains the

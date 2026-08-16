@@ -1,13 +1,16 @@
 # Protocol Amendment Record — 16 August 2026
 
-**Status:** PROPOSED. Nothing here is applied. No code, no rule, no JSON and no
-frozen protocol has been changed by this document.
+**Status:** **ADOPTED 16 Aug 2026.** A1, A2 and A4 are applied in code; A5 is
+decided (statistic held, measurement to be repeated); A3 remains open. The raw
+benchmark JSON has **not** been edited — it is preserved verbatim at
+`docs/evidence/2026-08-16_t4_benchmark_raw.json`, sha256
+`ecaf7071b8993338db1f00dcbf19474fa5c88c039ef97d7da211c72eebf4e39a`.
 
 **Trigger:** the official Tesla T4 benchmark (first CUDA run of
 `scripts/benchmark_architectures.py`) plus two commissioned audits — decision-rule
 consistency, and the decoder shape path.
 
-**Why this file exists.** Three of the four items below were discovered *after*
+**Why this file exists.** Four of the five items below were discovered *after*
 observing the T4 results. Any change to a decision rule, a measurement convention
 or a reported figure made after seeing results must be recorded as an explicit,
 dated amendment with its justification and its effect on every candidate —
@@ -20,15 +23,21 @@ from measurements · **[AWAITING DATA]**.
 
 ---
 
-## Summary of the four items
+## Summary of the five items
 
-| # | Item | Class | Changes a verdict? | Applied? |
+| # | Item | Class | Changes a verdict? | Status |
 |---|---|---|---|---|
-| **A1** | Latency rule does not name a batch size | Protocol ambiguity | **Yes** — see §A1.5 | No |
-| **A2** | `thop` over-counts `ConvTranspose2d` by stride² | Measurement defect | **No** | No |
-| **A3** | `SlimFeatureSpaceAE.describe()` reports the wrong decoder depth | Documentation defect | No | No |
-| **A4** | `tf.project` / `tf.norm` are dead parameters in every C2-* candidate | Implementation defect | No | No |
-| **A5** | Latency rule does not say mean or median, and BS1 std is 15–30 % | Protocol ambiguity + measurement quality | **Yes** — C2-28 is 3.034× on the mean, 2.923× on the median | No |
+| **A1** | Latency rule does not name a batch size | Protocol ambiguity | **Yes** — see §A1.5 | **APPLIED** — `PRIMARY_LATENCY_BATCH_SIZE = 1` |
+| **A2** | `thop` over-counts `ConvTranspose2d` by stride² | Measurement-tool defect | **No** | **APPLIED** — handler overridden in `count_flops` |
+| **A3** | `SlimFeatureSpaceAE.describe()` reports the wrong decoder depth | Documentation defect | No | **OPEN** — not applied |
+| **A4** | `tf.project` / `tf.norm` are dead parameters in every C2-* candidate | Implementation defect | No | **APPLIED** — head not built in feature-space mode |
+| **A5** | Latency rule does not say mean or median, and BS1 std is 15–30 % | Protocol ambiguity + measurement quality | **Yes** — 3.034× mean vs 2.923× median | **DECIDED** — mean retained, BS1 to be re-measured |
+
+**Applied means: fixed in code, with the raw pre-correction evidence preserved
+unedited.** A2 and A4 changed reported numbers but **no output**: logits,
+front-end tensors and AE latents are bit-identical before and after, verified by
+transferring the pre-fix weights so the comparison isolates computation from
+initialisation RNG.
 
 **No defect changes what C2-28 computes.** The forward path is correct and the
 classifier receives a correct `[B, 3, 224, 224]` tensor in all three C2 variants.
@@ -123,10 +132,18 @@ classify a single image, which is batch-size-1 latency. Batch-32 throughput
 describes a server-side batch-processing regime that this application does not
 describe, and a method cannot be rejected for a deployment mode it does not claim.
 
-**This distinction was not stated explicitly before the results were observed.**
-That is precisely why it is recorded here as an amendment rather than applied
-quietly. It is a genuine clarification of an under-specified rule, not a new rule:
-the implementation already behaved this way, by accident of argument order.
+### Mandatory disclosure
+
+**This clarification was introduced *after* the T4 results were observed, and
+specifically after discovering that the previous benchmark verdict depended on the
+order in which batch sizes were passed on the command line.** It was not stated
+explicitly beforehand. That sequence must be disclosed wherever the decision rule
+is described, including in the manuscript and in any response to reviewers.
+
+It is a clarification of an under-specified rule rather than a new rule — the
+implementation already computed the criterion on batch 1, by accident of argument
+order rather than by choice — but the fact that it was pinned down after seeing
+which candidates it favoured is exactly what the reader is entitled to know.
 
 **Full disclosure is mandatory and non-negotiable.** Batch-32 latency and
 throughput **must remain reported in every table, for every candidate**, with the
@@ -151,7 +168,7 @@ needs a signature, a date and a justification that stands on the application
 domain rather than on the result. **It does not make C2-28 "preferred"** —
 `meets_preferred` remains **false** under every accounting in this document.
 
-## A1.6 Proposed code change — **NOT APPLIED**
+## A1.6 Code change — **APPLIED**
 
 ```diff
 +# The deployment-critical metric for image-level interactive inference.
@@ -165,9 +182,14 @@ domain rather than on the result. **It does not make C2-28 "preferred"** —
 and record `"primary_latency_batch_size"` plus
 `"secondary_metrics_reported_not_used_for_rejection"` in the JSON verdict block.
 
-**Until this is applied, the `verdict` field in `t4_benchmark.json` is
-order-dependent and must not be quoted in the manuscript.** The underlying
-measurements are unaffected and remain valid.
+The verdict block now also records `primary_latency_batch_size`,
+`primary_latency_statistic`, `primary_latency_ratio` and
+`secondary_metrics_reported_not_used_for_rejection`, so the referent is explicit
+in every future run.
+
+**The `verdict` field in the preserved raw JSON remains order-dependent** — it was
+produced before this fix — and must not be quoted. Its underlying measurements are
+unaffected and remain valid.
 
 ---
 
@@ -237,12 +259,30 @@ overlooked. Three things constrain the temptation:
 3. **It is verifiable.** The empirical table above is reproducible in seconds and
    does not depend on trusting either implementation.
 
-## A2.5 Recommendation — **NOT APPLIED**
+## A2.5 Resolution — **APPLIED as a measurement-tool defect fix**
 
-Report **both** columns until a decision is taken. If adopted, the corrected
-convention must be applied to every FLOPs figure in the manuscript, including
-Original AE-TFPE's, and the 88.00× headline becomes 84.73×. Adopting it for the
-Efficient method only would be indefensible.
+`count_flops` now passes a `custom_ops` handler that counts transposed
+convolutions from input elements, overriding thop's. Applied **uniformly to every
+candidate**: Original AE-TFPE's headline becomes **84.73×**, not 88.00×. Applying
+it to the Efficient method only would have been indefensible.
+
+Authoritative figures regenerated with the fixed tool (which also reflect the A4
+parameter cleanup):
+
+| Candidate | Params | × base | GFLOPs | × base | Model size |
+|---|---|---|---|---|---|
+| BASELINE | 1,488,247 | 1.000 | 0.4116 | 1.000 | 5.703 MB |
+| C0 = Original AE-TFPE | 87,549,123 | 58.827 | 34.8731 | 84.726 | 334.576 MB |
+| C1 | 2,700,147 | 1.814 | 1.6602 | 4.034 | 10.919 MB |
+| `C2` = C2-7 | 2,544,634 | 1.710 | 0.9789 | 2.378 | 10.325 MB |
+| C2-14 | 2,066,890 | 1.389 | 1.0046 | 2.441 | 8.495 MB |
+| **C2-28** | **1,716,586** | **1.153** | **1.0126** | **2.460** | **7.155 MB** |
+| C3 | 2,263,930 | 1.521 | 0.6565 | 1.595 | 9.251 MB |
+
+One consequence must be stated plainly: **C1 was never hard-rejected.** At 4.03×
+it exceeds the ≤3× preferred band but clears the 5× threshold, so the earlier
+"C1 is hard-rejected at 7.31×" claim was an artifact of the defect and is
+withdrawn. C1 has no measured latency and is not reinstated as a candidate.
 
 ---
 
@@ -318,14 +358,34 @@ backward-pass check caught in `A5_aetfpe_full` (see `aetfpe.py`, the `self.fusio
 - **A G1-style backward check would fail** for every C2-* arm, exactly as it did
   for the dead-fusion bug.
 
-## A4.3 Proposed fix — **NOT APPLIED**
+## A4.3 Fix — **APPLIED as an implementation-defect cleanup**
 
-Do not build `project`/`norm` when the encoder is used in feature-space mode
-(mirroring the `self.fusion = None` precedent). Not applied because it changes a
-freshly measured, officially recorded parameter count, and because the audit brief
-forbids redesign. **It does not block the C2-28 sanity training**, whose result
-would be bit-identical either way — but it must be resolved before any parameter
-count is published.
+`TimmGlobalContextRGB` takes `image_space_head`; `AETFPE` passes
+`image_space_head=False` whenever `use_ae and ae_space == "feature"`, so the
+projection head is not built on the path that never calls it. `forward()` raises
+if invoked without a head, so the dead parameters cannot silently return. This
+mirrors the `self.fusion = None` precedent and is **not an architecture redesign**:
+no executed operation changed.
+
+Gated on proof, via `scripts/prove_dead_parameters.py`, which requires three
+independent tests to agree — the owning module never executes, the parameter is
+absent from the autograd graph reachable from the logits, and it receives no
+gradient. The controls are what make this safe: **C0 and C1 have zero dead
+parameters** and correctly keep their heads.
+
+| Candidate | Params before | Params after | Removed | Trainable after |
+|---|---|---|---|---|
+| C2-7 | 2,545,603 | 2,544,634 | 969 | 1,593,610 |
+| C2-14 | 2,067,091 | 2,066,890 | 201 | 1,575,546 |
+| **C2-28** | 1,716,739 | **1,716,586** | **153** | 1,567,066 |
+| C3 | 2,264,323 | 2,263,930 | 393 | 1,581,322 |
+| C1 / C0 *(controls)* | unchanged | unchanged | **0** | unchanged |
+
+**Outputs verified bit-identical** for C2-7 / C2-14 / C2-28 / C1 — logits,
+front-end tensor and AE latent — by loading the pre-fix weights into the post-fix
+model, so the comparison tests computation rather than initialisation RNG.
+Forward/backward re-validated afterwards: finite logits, finite gradients, and
+**zero dead parameters in every candidate**.
 
 ---
 
@@ -366,10 +426,14 @@ standard deviation (2.04 ms) is **60× larger than the gap to the threshold**
 The effect is systemic, not specific to C2-28: C0 moves 8.477 → 7.324 and C2-14
 moves 4.868 → 4.409. Only `C2`/C2-7 moves the other way (8.028 → 8.885).
 
-## A5.3 Recommendation — **do not choose the statistic that helps**
+## A5.3 Decision — **the mean is retained; the measurement is repeated**
 
-Switching to the median now would move C2-28 inside the preferred band, which is
-precisely why it must **not** be done as a post-hoc choice. The defensible options are:
+Switching to the median would move C2-28 inside the preferred band, which is
+precisely why it is **not** done. `PRIMARY_LATENCY_STATISTIC = "latency_ms_mean"`
+is pinned in code. The measurement is re-run instead, at
+warm-up 100 / 1000 timed iterations / batch 1, reporting mean, std, median and
+p95 — with the decision statistic fixed in advance as the mean. The options
+considered were:
 
 1. **Re-measure batch-1 latency under a tighter protocol** — more timed
    iterations, longer warm-up, locked GPU clocks, and an idle session — then
@@ -392,19 +456,20 @@ safe to state.
 
 # Decisions required
 
-| # | Decision | Blocks |
+| # | Decision | Status |
 |---|---|---|
-| 1 | ~~Supply the raw C2-7 `verdict` block~~ — **resolved**, §A1.3: the JSON records `true`, matching the implementation | — |
-| 2 | Adopt BS1-primary / BS32-secondary, with BS32 always reported? | Any Efficient-side training claim |
-| 3 | Adopt corrected transposed-conv FLOPs accounting, applied to **all** candidates? | Every FLOPs figure, incl. the 88.00× headline |
-| 4 | Apply the `describe()` fix and re-record metadata? | Manuscript architecture table |
-| 5 | Remove the dead `project`/`norm` and re-measure params? | Published parameter counts |
-| 6 | **Re-measure batch-1 latency with lower variance** (§A5), pre-registering mean-or-median first | Any claim resting on the 3× boundary |
-| 7 | Rename the JSON candidate key `C2` → `C2-7` (§A1.3) | Anyone matching the JSON on documented names |
+| 1 | Supply the raw C2-7 `verdict` block | **RESOLVED** — §A1.3: the JSON records `true`, matching the implementation |
+| 2 | Adopt BS1-primary / BS32-secondary, BS32 always reported | **ADOPTED & APPLIED** — `PRIMARY_LATENCY_BATCH_SIZE = 1` |
+| 3 | Adopt corrected transposed-conv FLOPs accounting for **all** candidates | **ADOPTED & APPLIED** — the 88.00× headline is now 84.73× |
+| 4 | Apply the `describe()` fix and re-record metadata | **OPEN** — one line; the true decoder path is recorded in `DECODER_PATH_AUDIT.md` meanwhile |
+| 5 | Remove the dead `project`/`norm` and re-measure params | **ADOPTED & APPLIED** — gated on three-way proof; outputs bit-identical |
+| 6 | Re-measure batch-1 latency with lower variance, statistic fixed first | **PENDING** — statistic fixed to the **mean**; run prepared, warm-up 100 / 1000 iters / batch 1 |
+| 7 | Rename the JSON candidate key `C2` → `C2-7` | **OPEN** — cosmetic; noted wherever the JSON is quoted |
 
-Items 3–5 and 7 are one-line changes. Item 6 costs one short T4 run. **None is
-applied here.**
+Only A3 (item 4) and the key rename (item 7) remain unapplied, and neither affects
+any measurement.
 
-**None of these blocks the single C2-28 clean-validation sanity run**, which
-measures whether the 28×28 representation is learnable — a question none of the
-four items affects.
+**None of these blocks the single C2-28 clean-validation sanity run**, which asks
+whether the 28×28 representation is learnable — a question no item here affects.
+
+

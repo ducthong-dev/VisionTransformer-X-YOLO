@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import statistics
 import sys
@@ -92,6 +93,27 @@ PREFERRED_LATENCY_RATIO = 3.0
 REJECT_FLOPS_RATIO = 5.0
 REJECT_LATENCY_RATIO = 5.0
 
+# PRIMARY DEPLOYMENT METRIC (protocol amendment A1, 16 Aug 2026).
+#
+# The target workflow is image-level interactive agricultural classification: one
+# image is submitted and the operator waits, so the deployment-critical quantity is
+# single-image latency. Batch-32 latency and throughput describe a server-side
+# batch regime the application does not claim; they are ALWAYS reported and are
+# never used to reject a candidate.
+#
+# Pinned to an explicit constant because it previously resolved to
+# `args.batch_sizes[0]` -- whichever batch size happened to be listed first on the
+# command line. `--batch-sizes 32 1` would have flipped C2-14 and C2-28 on
+# identical measurements. That order-dependence is the defect this constant fixes.
+PRIMARY_LATENCY_BATCH_SIZE = 1
+
+# The decision statistic is the MEAN, deliberately retained. Batch-1 timings carry
+# 15-30% relative standard deviation, and C2-28 sits at 3.034x on the mean but
+# 2.923x on the median -- switching to the median after observing that would move
+# the leading candidate inside the preferred band, so the statistic is held fixed
+# and the measurement is re-run instead. See amendment A5.
+PRIMARY_LATENCY_STATISTIC = "latency_ms_mean"
+
 
 def sync(device: str) -> None:
     if device.startswith("cuda"):
@@ -127,11 +149,15 @@ def measure_latency(model, device, batch_size, img_size, warmup, iters, amp):
         times.append((time.perf_counter() - t0) * 1000.0)
 
     mean = statistics.fmean(times)
+    ordered = sorted(times)
+    # Nearest-rank p95: index ceil(0.95*n)-1 on the sorted samples.
+    p95 = ordered[min(len(ordered) - 1, max(0, math.ceil(0.95 * len(ordered)) - 1))]
     return {
         "batch_size": batch_size,
         "latency_ms_mean": round(mean, 4),
         "latency_ms_std": round(statistics.pstdev(times), 4),
         "latency_ms_median": round(statistics.median(times), 4),
+        "latency_ms_p95": round(p95, 4),
         "latency_ms_per_image": round(mean / batch_size, 5),
         "throughput_img_per_s": round(batch_size * 1000.0 / mean, 2),
         "warmup_iters": warmup,
@@ -281,17 +307,27 @@ def main() -> int:
                 r["vs_baseline"][f"latency_ratio_bs{bs}"] = round(c / b, 3)
 
             fl = r["vs_baseline"]["gflops_ratio"]
-            lat = r["vs_baseline"][f"latency_ratio_bs{args.batch_sizes[0]}"]
-            hard_reject = fl > REJECT_FLOPS_RATIO or (reportable and lat > REJECT_LATENCY_RATIO)
+            # Primary metric only. Secondary batch sizes stay in the record and are
+            # never used to reject; `lat` is None if the primary batch size was not
+            # measured, in which case the latency criterion is simply not evaluated.
+            lat = r["vs_baseline"].get(f"latency_ratio_bs{PRIMARY_LATENCY_BATCH_SIZE}")
+            lat_evaluated = reportable and lat is not None
+            hard_reject = fl > REJECT_FLOPS_RATIO or (lat_evaluated and lat > REJECT_LATENCY_RATIO)
             preferred = (
                 r["params_total"] <= PREFERRED_PARAMS
                 and fl <= PREFERRED_FLOPS_RATIO
-                and (not reportable or lat <= PREFERRED_LATENCY_RATIO)
+                and (not lat_evaluated or lat <= PREFERRED_LATENCY_RATIO)
             )
             r["verdict"] = {
                 "hard_reject": bool(hard_reject),
                 "meets_preferred": bool(preferred),
-                "latency_criterion_evaluated": reportable,
+                "latency_criterion_evaluated": bool(lat_evaluated),
+                "primary_latency_batch_size": PRIMARY_LATENCY_BATCH_SIZE,
+                "primary_latency_statistic": PRIMARY_LATENCY_STATISTIC,
+                "primary_latency_ratio": lat,
+                "secondary_metrics_reported_not_used_for_rejection": [
+                    f"latency_ratio_bs{bs}" for bs in args.batch_sizes
+                    if bs != PRIMARY_LATENCY_BATCH_SIZE],
             }
 
     payload = {

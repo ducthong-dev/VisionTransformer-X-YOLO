@@ -7,11 +7,13 @@ Evidence labels used throughout — **[MEASURED]** on real data/code · **[RECOV
 historical artifact · **[RECONSTRUCTED]** rebuilt because the original is unavailable · **[DERIVED]**
 arithmetic from measurements · **[HYPOTHESIS]** reasoned but unverified · **[NOT YET TESTED]**.
 
-> **Update 16 Aug 2026 — the T4 benchmark has been executed (§3).** Four defects
-> found afterwards are recorded in **`PROTOCOL_AMENDMENT_2026-08-16.md`**, and the
-> decoder trace in **`DECODER_PATH_AUDIT.md`**. Read the amendment before quoting
-> any FLOPs figure or any `verdict` field: the benchmark's latency criterion is
-> currently order-dependent, and `thop` over-counts transposed convolutions by 4×.
+> **Update 16 Aug 2026 — the T4 benchmark has been executed (§3).** Five defects
+> found afterwards are recorded in **`PROTOCOL_AMENDMENT_2026-08-16.md`**, with the
+> decoder trace in **`DECODER_PATH_AUDIT.md`**. Three are now **fixed in code**:
+> the FLOPs handler, the dead projection-head parameters, and the order-dependent
+> latency criterion. Every FLOPs and parameter figure in this document is the
+> corrected one; the raw benchmark is preserved unedited at
+> `docs/evidence/2026-08-16_t4_benchmark_raw.json`.
 > **C2-28 is a CONDITIONAL CANDIDATE, not yet validated, and not to be called
 > "efficient" on cost evidence alone** (§3.3).
 
@@ -44,7 +46,8 @@ revision-time improvement — never retroactively as what the paper originally d
 ### 1.1 ORIGINAL AE-TFPE
 
 Corresponds to frozen arm `A5_aetfpe_full` (= candidate C0).
-**[MEASURED]** 87,549,123 params · 36.2215 GFLOPs · 58.83× baseline params · 88.00× baseline FLOPs.
+**[MEASURED]** 87,549,123 params · **34.8731 GFLOPs** · 58.83× baseline params · **84.73× baseline FLOPs**
+(corrected accounting; 36.2215 / 88.00× under the defective handler).
 
 #### A. Statements directly supported by the original manuscript
 
@@ -92,10 +95,10 @@ Corresponds to frozen arm `A5_aetfpe_full` (= candidate C0).
 
 | Claim | Location | Status |
 |---|---|---|
-| "this overhead is modest compared to the backbone feature extractor" | §5.1 | **[MEASURED] refuted** — 88.00× the classifier's FLOPs |
+| "this overhead is modest compared to the backbone feature extractor" | §5.1 | **[MEASURED] refuted** — 84.73× the classifier's FLOPs |
 | "the auto-encoder operates on intermediate feature representations rather than raw images" | §5.1 | **[MEASURED] false** of the reconstruction (image-space AE) |
 | "the fusion mechanism operates on fixed-dimensional latent features rather than directly on image pixels" | §5.3 | **[MEASURED] false** of the reconstruction |
-| "real-time inference on resource-constrained devices" | §5.2 | **[DERIVED]** not supportable at 36.22 GFLOPs |
+| "real-time inference on resource-constrained devices" | §5.2 | **[MEASURED]** not supportable: 34.87 GFLOPs, **28.51 ms/image on a T4** (8.48× the classifier) |
 | Model "not initialized with pre-trained weights … randomly initialized" | §4.2.2 | **[RECOVERED] contradicted** — `pretrained=True`, 156/158 transferred |
 | 50 epochs / 4.017 h; lr 0.01; momentum 0.937 | §4.2.3 | **[RECOVERED] contradicted** — 30 epochs / 1.980 h; lr 7.14e-4 resolved by `optimizer=auto` |
 | "61,486 images" | Abstract, §4.1 | **[RECOVERED] contradicted** — 55,259 |
@@ -106,7 +109,7 @@ Corresponds to frozen arm `A5_aetfpe_full` (= candidate C0).
 
 ### 1.2 EFFICIENT AE-TFPE
 
-Leading candidate **C2-28**. **[MEASURED]** 1,716,739 params · 1.8215 GFLOPs · 1.15× baseline params · 4.43× baseline FLOPs.
+Leading candidate **C2-28**. **[MEASURED]** **1,716,586** params · **1.0126 GFLOPs** · 1.15× baseline params · **2.46× baseline FLOPs** · **10.2045 ms** batch-1 on a T4 (3.034×).
 **[NOT YET TESTED]** — not adopted, not trained, no superiority claimed.
 
 #### Inherited unchanged from Original AE-TFPE
@@ -168,14 +171,17 @@ are in `ARCHITECTURE_V2_BENCHMARK.md` §8 and `PROTOCOL_AMENDMENT_2026-08-16.md`
 | Model | Params | ×base | GFLOPs *(corrected)* | ×base | **BS1 latency** | ×base | BS32/img | ×base |
 |---|---|---|---|---|---|---|---|---|
 | YOLOv8n-cls baseline | 1,488,247 | 1.00× | 0.4116 | 1.00× | **3.3632 ms** | 1.000 | 0.22906 ms | 1.000 |
-| **Original AE-TFPE (C0)** | 87,549,123 | 58.83× | 34.8728 | 84.73× | 28.5088 ms | 8.477 | 10.7734 ms | 47.033 |
-| C2-7 | 2,545,603 | 1.71× | 0.9786 | 2.378× | 27.0000 ms | 8.028 | 1.2318 ms | 5.378 |
-| C2-14 | 2,067,091 | 1.39× | 1.0043 | 2.440× | 16.3708 ms | 4.868 | 1.2260 ms | 5.352 |
-| **C2-28 (leading Efficient candidate)** | 1,716,739 | **1.15×** | 1.0123 | 2.459× | **10.2045 ms** | **3.034** | 1.2908 ms | 5.635 |
+| **Original AE-TFPE (C0)** | 87,549,123 | 58.83× | 34.8731 | 84.73× | 28.5088 ms | 8.477 | 10.7734 ms | 47.033 |
+| C2-7 | 2,544,634 | 1.71× | 0.9789 | 2.378× | 27.0000 ms | 8.028 | 1.2318 ms | 5.378 |
+| C2-14 | 2,066,890 | 1.39× | 1.0046 | 2.441× | 16.3708 ms | 4.868 | 1.2260 ms | 5.352 |
+| **C2-28 (leading Efficient candidate)** | **1,716,586** | **1.15×** | 1.0126 | 2.460× | **10.2045 ms** | **3.034** | 1.2908 ms | 5.635 |
 
-GFLOPs are the **corrected** values; as-reported `thop` figures are 88.00× /
-2.74× / 3.38× / 4.43× and are inflated by a transposed-convolution over-count
-(amendment §A2). Peak CUDA memory is in §3.1/§3.2.
+GFLOPs and parameters are the **corrected** values, produced by the fixed
+measurement tool. The raw JSON figures (88.00× / 2.74× / 3.38× / 4.43×, and
+parameter counts 969 / 201 / 153 higher for the C2 family) are preserved in
+`docs/evidence/2026-08-16_t4_benchmark_raw.json` and tabulated side by side in
+`ARCHITECTURE_V2_BENCHMARK.md` §8. Both defects are fixed in code; **no output
+changed**. Peak CUDA memory is in §3.1/§3.2.
 
 ⚠ **Batch-1 latency carries 15–30 % relative standard deviation.** C2-28 is
 3.034× on the mean and **2.923× on the median** — the two straddle the 3×
@@ -192,8 +198,8 @@ The two-method comparison the revision is built on:
 
 | Quantity | Original AE-TFPE | Efficient AE-TFPE (C2-28) | Reduction | Factor |
 |---|---|---|---|---|
-| Parameters | 87,549,123 | 1,716,739 | **−98.04 %** | **51.0×** |
-| GFLOPs *(corrected)* | 34.8728 | 1.0123 | **−97.10 %** | **34.5×** |
+| Parameters | 87,549,123 | 1,716,586 | **−98.04 %** | **51.0×** |
+| GFLOPs *(corrected)* | 34.8731 | 1.0126 | **−97.10 %** | **34.4×** |
 | GFLOPs *(as reported)* | 36.2215 | 1.8215 | −94.97 % | 19.9× |
 | Model size (fp32) | 334.576 MB | 7.156 MB | **−97.86 %** | **46.8×** |
 | **BS1 latency** | 28.5088 ms | 10.2045 ms | **−64.21 %** | **2.79×** |
@@ -206,8 +212,8 @@ The two-method comparison the revision is built on:
 
 | Quantity | YOLOv8n-cls | C2-28 | Overhead |
 |---|---|---|---|
-| Parameters | 1,488,247 | 1,716,739 | **+15.4 %** (1.154×) |
-| GFLOPs *(corrected)* | 0.4116 | 1.0123 | **+145.9 %** (2.459×) |
+| Parameters | 1,488,247 | 1,716,586 | **+15.4 %** (1.153×) |
+| GFLOPs *(corrected)* | 0.4116 | 1.0126 | **+146.0 %** (2.460×) |
 | GFLOPs *(as reported)* | 0.4116 | 1.8215 | +342.5 % (4.425×) |
 | Model size (fp32) | 5.703 MB | 7.156 MB | +25.5 % (1.255×) |
 | **BS1 latency** | 3.3632 ms | 10.2045 ms | **+203.4 %** (3.034×) |

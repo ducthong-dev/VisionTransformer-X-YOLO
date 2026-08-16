@@ -228,6 +228,99 @@ print("\nPRE-REGISTERED VERDICT:",
 
 ---
 
+## 4b. POST-AUDIT RUNS — added 16 Aug 2026, after the T4 benchmark and its audits
+
+Job A is complete. Two runs remain, in this order. Pull first: the fixes from
+amendment A1/A2/A4 change reported figures (not outputs).
+
+```python
+!git pull
+!python scripts/verify_no_test_access.py     # must print exit 0
+!python scripts/prove_dead_parameters.py     # must report 0 dead parameters
+!python scripts/test_device_placement.py     # must print 27/27
+```
+
+### RUN 1 — T4 batch-1 stability benchmark *(≈2 min)*
+
+Batch-1 latency carried 15–30 % relative standard deviation in the official run
+(amendment §A5). This re-measures it with 2× the warm-up and 5× the timed
+iterations, on the two models that matter. **The decision statistic remains the
+mean** — fixed in code as `PRIMARY_LATENCY_STATISTIC`, and fixed *before* this run.
+
+```python
+!python scripts/benchmark_architectures.py --device cuda --pretrained \
+    --only BASELINE C2-28 \
+    --batch-sizes 1 --warmup 100 --iters 1000 \
+    --out "$OUTPUT_ROOT/architecture_v2/t4_bs1_stability.json"
+```
+
+```python
+import json
+d = json.load(open('/content/output/architecture_v2/t4_bs1_stability.json'))
+b = [r for r in d['candidates'] if r['candidate'] == 'BASELINE'][0]['latency']['1']
+print("GPU:", d['hardware'].get('gpu'), "| warmup", d['warmup_iters'], "| timed", d['timed_iters'])
+print(f"{'model':<10}{'mean':>10}{'std':>9}{'std/mean':>10}{'median':>10}{'p95':>10}{'x base (mean)':>15}")
+for r in d['candidates']:
+    l = r['latency']['1']
+    print(f"{r['candidate']:<10}{l['latency_ms_mean']:>10.4f}{l['latency_ms_std']:>9.4f}"
+          f"{l['latency_ms_std']/l['latency_ms_mean']:>9.1%}{l['latency_ms_median']:>10.4f}"
+          f"{l['latency_ms_p95']:>10.4f}{l['latency_ms_mean']/b['latency_ms_mean']:>15.3f}")
+print("\nverdict block:", json.dumps(d['candidates'][-1]['verdict'], indent=2))
+```
+
+**Pre-registered reading.** The decision statistic is the **mean ratio**. ≤ 3.0×
+puts C2-28 inside the preferred band; > 3.0× leaves it outside; > 5.0× is a hard
+reject on the primary deployment metric. Report std, median and p95 alongside —
+they characterise the measurement, they do not decide it. **Do not substitute the
+median if the mean lands unfavourably.**
+
+### RUN 2 — C2-28 clean-validation sanity training
+
+All protocol values are inherited from the frozen `Protocol` dataclass and are
+listed explicitly below so nothing is implicit.
+
+```python
+!python scripts/train.py \
+    --config configs/aetfpe_full.yaml \
+    --device cuda \
+    --override model.tf_backbone=mobilevit_xxs \
+    --override model.ae_space=feature \
+    --override model.tf_stage=2 \
+    --out "$OUTPUT_ROOT/validation/C2_28_clean_sanity"
+```
+
+| Setting | Value | Source |
+|---|---|---|
+| Dataset root | `$DATA_ROOT` = `/content/data/Plant_leaf_diseases_dataset` | env var, `_base.yaml` |
+| Train split | `$DATA_ROOT/train` — 38,584 images | `data.train_split` |
+| Val split | `$DATA_ROOT/val` — 8,340 images | `data.val_split` |
+| Test split | **never constructed** | verified, see below |
+| Classes | 39 | enumerated from the train split |
+| Epochs | **30** | `Protocol.epochs` |
+| Batch size | **128** | `Protocol.batch_size` |
+| Seed | **0**, `deterministic=True` | `Protocol.seed` |
+| Device | **cuda** | explicit flag |
+| Image size | 224 × 224 | `Protocol.img_size` |
+| Optimiser | AdamW, lr **7.14e-4**, wd 0.001, betas (0.9, 0.999) | `Protocol` |
+| Warm-up | 3 epochs | `Protocol.warmup_epochs` |
+| AMP | **off** | `Protocol.amp` |
+| AE loss | β = 0.001 (KL), weight 10.0, warm-up 3 epochs | `Protocol` |
+| Checkpoint selection | **best_val_top1** | `Protocol.checkpoint_selection` |
+| Workers | 4 | `Protocol.num_workers` |
+| Model | `mobilevit_xxs`, `ae_space=feature`, `tf_stage=2` → 28×28 grid | overrides |
+| Params | **1,716,586** (post-cleanup) | measured |
+| Output | `$OUTPUT_ROOT/validation/C2_28_clean_sanity` | explicit flag |
+
+**No test path and no corruption path is reachable** — `verify_no_test_access.py`
+proves it at AST level: `data['test_split']` and `data['corruption_root']` are
+never read anywhere in `train.py` or any of the 8 first-party modules it imports,
+and the only dataset roots built are `data['train_split']` and `data['val_split']`.
+The keys exist in `_base.yaml` but nothing reachable from the trainer consumes them.
+
+The §1 pre-registered verdict bands and the Cell 5 readout apply unchanged.
+
+---
+
 ## 5. Expected output files
 
 | Path | Contents | Size |
@@ -248,7 +341,11 @@ print("\nPRE-REGISTERED VERDICT:",
 |---|---|---|
 | YOLOv8n-cls baseline | 1,488,247 | **5.76 MB** |
 | Original AE-TFPE (C0) | 87,549,123 | **334.72 MB** |
-| **C2-28** | 1,716,739 | **7.27 MB** |
+| **C2-28** | **1,716,586** | **~7.27 MB** |
+
+C2-28's parameter count is 153 lower than the 1,716,739 measured before the
+dead-parameter cleanup (amendment §A4); the checkpoint size is unchanged to two
+decimal places.
 
 Job B produces **one** checkpoint: 7.27 MB. C0's 334.72 MB is listed for
 comparison only — Original AE-TFPE is **not trained** in this package.
