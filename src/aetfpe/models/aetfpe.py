@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..autoencoder.model import StackedSparseDenoisingAE
 from ..features.legacy_lut import legacy_transform_tensor
@@ -52,6 +53,16 @@ class AETFPEConfig:
     ae_widths: tuple = (32, 64)
     ae_sparse: bool = True            # False -> plain (non-sparse) AE, arm D1
     ae_denoising: bool = True         # False -> clean-in/clean-out, arm D1
+
+    # --- v2 architecture evaluation (EXPLORATORY, defaults preserve v1 exactly) ---
+    # Empty tf_backbone -> the frozen HuggingFace ViT-B/16 branch.
+    # A timm name (e.g. "mobilevit_xxs") -> lightweight global-context encoder.
+    tf_backbone: str = ""
+    # "image"   -> StackedSparseDenoisingAE on the 224x224 fused map (frozen v1)
+    # "feature" -> SlimFeatureSpaceAE on the encoder's native grid (manuscript 5.1/5.3)
+    ae_space: str = "image"
+    ae_slim_latent_channels: int = 64
+    ae_slim_decoder_widths: tuple = (48, 32, 16, 8)
 
     # --- classifier ---
     classifier: str = "yolov8n-cls"
@@ -94,16 +105,24 @@ class AETFPE(nn.Module):
             if cfg.use_pe
             else None
         )
-        self.tf = (
-            TransformerFeatureRGB(
+        if not cfg.use_tf:
+            self.tf = None
+        elif cfg.tf_backbone:
+            from ..features.timm_encoder import TimmGlobalContextRGB
+
+            self.tf = TimmGlobalContextRGB(
+                model_name=cfg.tf_backbone,
+                out_channels=3,
+                freeze=cfg.vit_frozen,
+                pretrained=cfg.vit_pretrained,
+            )
+        else:
+            self.tf = TransformerFeatureRGB(
                 model_name=cfg.vit_name,
                 out_channels=3,
                 freeze=cfg.vit_frozen,
                 pretrained=cfg.vit_pretrained,
             )
-            if cfg.use_tf
-            else None
-        )
 
         if cfg.use_ae:
             # The AE always consumes the *concatenated* map when both branches
@@ -119,13 +138,35 @@ class AETFPE(nn.Module):
             # it does not change any arm's actual forward computation, since
             # `fused` was never used when use_ae=True.
             self.fusion = None
-            self.ae_in_channels = 6 if cfg.use_tf else 3
-            self.ae = StackedSparseDenoisingAE(
-                in_channels=self.ae_in_channels,
-                out_channels=3,
-                widths=tuple(cfg.ae_widths),
-                latent_channels=cfg.ae_latent_channels,
-            )
+            if cfg.ae_space == "feature":
+                # Fuse and encode at the backbone's native grid, then decode back
+                # to an image so the classifier stays byte-for-byte unmodified.
+                # Requires a TF branch: there is no "feature grid" without one.
+                if self.tf is None:
+                    raise ValueError("ae_space='feature' requires use_tf=True")
+                from ..autoencoder.model import SlimFeatureSpaceAE
+
+                grid = cfg.img_size // getattr(self.tf, "backbone_reduction", 32)
+                # PE-RGB is average-pooled to the grid and concatenated with the
+                # backbone's raw feature map -- the same concat operator as the
+                # image-space path, applied at the grid instead of at 224x224.
+                self.ae_in_channels = self.tf.backbone_channels + 3
+                self.ae = SlimFeatureSpaceAE(
+                    in_channels=self.ae_in_channels,
+                    out_channels=3,
+                    latent_channels=cfg.ae_slim_latent_channels,
+                    decoder_widths=tuple(cfg.ae_slim_decoder_widths),
+                    grid=grid,
+                    out_size=cfg.img_size,
+                )
+            else:
+                self.ae_in_channels = 6 if cfg.use_tf else 3
+                self.ae = StackedSparseDenoisingAE(
+                    in_channels=self.ae_in_channels,
+                    out_channels=3,
+                    widths=tuple(cfg.ae_widths),
+                    latent_channels=cfg.ae_latent_channels,
+                )
             classifier_in = 3
         else:
             fusion_name = cfg.fusion if cfg.use_tf else "identity"
@@ -163,8 +204,17 @@ class AETFPE(nn.Module):
         pe = self.pe(x) if self.pe is not None else x
 
         if self.tf is not None:
-            tf = self.tf(pe)
-            fused_for_ae = torch.cat([pe, tf], dim=1)
+            if self.cfg.ae_space == "feature" and self.ae is not None:
+                # Feature-space path: fuse at the backbone's native grid.
+                # PE-RGB is pooled to the grid; the TF branch contributes its raw
+                # feature map rather than the 3-channel image-space projection.
+                grid_feat = self.tf.forward_features(pe)
+                pe_grid = F.adaptive_avg_pool2d(pe, grid_feat.shape[-2:])
+                tf = None
+                fused_for_ae = torch.cat([pe_grid, grid_feat], dim=1)
+            else:
+                tf = self.tf(pe)
+                fused_for_ae = torch.cat([pe, tf], dim=1)
         else:
             tf = None
             fused_for_ae = pe
