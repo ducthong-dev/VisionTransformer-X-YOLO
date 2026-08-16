@@ -17,6 +17,7 @@ The only arm that touches the classifier is plain concatenation, which needs a
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import torch
@@ -58,11 +59,19 @@ class AETFPEConfig:
     # Empty tf_backbone -> the frozen HuggingFace ViT-B/16 branch.
     # A timm name (e.g. "mobilevit_xxs") -> lightweight global-context encoder.
     tf_backbone: str = ""
+    # Which backbone stage supplies the TF representation. None -> final stage.
+    # For mobilevit_xxs at 224: 2 -> 28x28, 3 -> 14x14, 4 (or None) -> 7x7.
+    # Earlier stages also TRUNCATE the backbone, so they are cheaper there.
+    tf_stage: int | None = None
     # "image"   -> StackedSparseDenoisingAE on the 224x224 fused map (frozen v1)
     # "feature" -> SlimFeatureSpaceAE on the encoder's native grid (manuscript 5.1/5.3)
     ae_space: str = "image"
     ae_slim_latent_channels: int = 64
-    ae_slim_decoder_widths: tuple = (48, 32, 16, 8)
+    # Empty -> derive a halving taper from the number of upsampling stages the
+    # grid requires: 7x7 needs 5 stages -> (48,32,16,8); 14x14 needs 4 -> (48,32,16);
+    # 28x28 needs 3 -> (48,32). Holding the taper rule and the latent channel count
+    # fixed is what makes the three grids comparable.
+    ae_slim_decoder_widths: tuple = ()
 
     # --- classifier ---
     classifier: str = "yolov8n-cls"
@@ -115,6 +124,7 @@ class AETFPE(nn.Module):
                 out_channels=3,
                 freeze=cfg.vit_frozen,
                 pretrained=cfg.vit_pretrained,
+                out_index=cfg.tf_stage,
             )
         else:
             self.tf = TransformerFeatureRGB(
@@ -147,6 +157,10 @@ class AETFPE(nn.Module):
                 from ..autoencoder.model import SlimFeatureSpaceAE
 
                 grid = cfg.img_size // getattr(self.tf, "backbone_reduction", 32)
+                widths = tuple(cfg.ae_slim_decoder_widths)
+                if not widths:
+                    n_up = int(round(math.log2(cfg.img_size / grid)))
+                    widths = (48, 32, 16, 8)[: n_up - 1]
                 # PE-RGB is average-pooled to the grid and concatenated with the
                 # backbone's raw feature map -- the same concat operator as the
                 # image-space path, applied at the grid instead of at 224x224.
@@ -155,7 +169,7 @@ class AETFPE(nn.Module):
                     in_channels=self.ae_in_channels,
                     out_channels=3,
                     latent_channels=cfg.ae_slim_latent_channels,
-                    decoder_widths=tuple(cfg.ae_slim_decoder_widths),
+                    decoder_widths=widths,
                     grid=grid,
                     out_size=cfg.img_size,
                 )

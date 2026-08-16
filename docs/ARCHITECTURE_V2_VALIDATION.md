@@ -159,7 +159,15 @@ expectation that `A1_pe_only ≈ A0_baseline_rgb`. If the ablation confirms it, 
 manuscript cannot continue to claim PE-RGB as one of three *complementary*
 contributing components (Abstract, §1, §3.1). No change to PE has been made.
 
-### 3.2 In C2 the PE branch is additionally swamped 243:1 — a C2-specific defect
+### 3.2 In C2-7 the PE branch is additionally swamped 243:1 — a stage-4-specific defect
+
+> **SUPERSEDED IN SCOPE, 16 Aug.** This finding is specific to the **stage-4 (7×7)**
+> representation and does **not** generalise to the other candidate stages. Measured
+> across stages on identical images: stage 4 → 283×, stage 3 (14×14) → 23×, stage 2
+> (28×28) → 11×, with F_PE contributing 0.040% / 1.03% / 2.47% of fused magnitude
+> respectively. The extreme mismatch is an artefact of stage 4's 320-channel
+> post-expansion activations, not of feature-space fusion as such. See
+> `ARCHITECTURE_V2_SPATIAL_TRADEOFF.md` §8. PE itself was not modified.
 
 | | Dims | ‖·‖ | Per-element RMS |
 |---|---|---|---|
@@ -175,9 +183,9 @@ channels at a comparable scale. Moving to feature space concatenates a `[0,1]`
 thumbnail with unnormalised backbone activations, and the AE's 1×1 conv sees the PE
 channels as numerical noise.
 
-**So C2 does not merely weaken the PE branch; it deletes it.** Adopting C2 means the
-paper can no longer claim PE-RGB as a component of the deployed method, independently
-of whether PE would have worked at full resolution.
+**So C2-7 does not merely weaken the PE branch; it deletes it.** That conclusion holds
+for the 7×7 variant only — at 14×14 and 28×28 the branch retains 1.0% and 2.5% of
+fused magnitude respectively, small but not annihilated.
 
 Fixing this would require normalising the backbone features before concatenation —
 a change to fusion semantics, which the brief forbids and which I have not made.

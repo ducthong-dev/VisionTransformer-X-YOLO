@@ -46,12 +46,31 @@ class TimmGlobalContextRGB(nn.Module):
         freeze: bool = True,
         pretrained: bool = True,
         upsample_mode: str = "bilinear",
+        out_index: int | None = None,
     ) -> None:
+        """`out_index` selects which backbone stage supplies the representation.
+
+        None -> the final stage (stride 32, 7x7 at 224 input). Passing an earlier
+        index both raises the spatial resolution AND truncates the backbone, so
+        the network beyond that stage is never built or executed. For
+        mobilevit_xxs at 224:
+
+            index 2 -> 48 ch, 28x28, stride 8    149,520 params, 0.3210 GFLOPs
+            index 3 -> 64 ch, 14x14, stride 16   491,344 params, 0.4598 GFLOPs
+            index 4 -> 320 ch,  7x7, stride 32   951,024 params, 0.5137 GFLOPs
+
+        All three of those stages terminate in a MobileVitBlock, so each carries
+        genuine global context -- stages 0 and 1 are purely convolutional
+        (BottleneckBlock only) and must not be used as the TF branch.
+        """
         super().__init__()
         import timm
 
-        self.backbone = timm.create_model(model_name, pretrained=pretrained, features_only=True)
+        kwargs = {} if out_index is None else {"out_indices": (out_index,)}
+        self.backbone = timm.create_model(
+            model_name, pretrained=pretrained, features_only=True, **kwargs)
         self.model_name = model_name
+        self.out_index = out_index
         self.frozen = bool(freeze)
         self.upsample_mode = upsample_mode
 
@@ -92,6 +111,7 @@ class TimmGlobalContextRGB(nn.Module):
     def describe(self) -> dict:
         return {
             "model_name": self.model_name,
+            "out_index": self.out_index,
             "library": "timm (features_only)",
             "pretrained": True,
             "frozen": self.frozen,

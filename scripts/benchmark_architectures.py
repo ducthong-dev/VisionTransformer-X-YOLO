@@ -54,9 +54,22 @@ CANDIDATES = {
                       tf_backbone="mobilevit_xxs", ae_space="image"),
     },
     "C2": {
-        "label": "MobileViT-XXS + slim feature-space AE + YOLOv8n-cls",
+        "label": "MobileViT-XXS stage4 (7x7) + slim feature-space AE + YOLOv8n-cls",
         "model": dict(use_pe=True, use_tf=True, use_ae=True, fusion="linear",
                       tf_backbone="mobilevit_xxs", ae_space="feature"),
+    },
+    # Spatial-resolution sweep. Same backbone, same latent channel count, same
+    # decoder taper rule -- only the stage (and therefore the grid) changes, so
+    # the comparison isolates spatial resolution.
+    "C2-14": {
+        "label": "MobileViT-XXS stage3 (14x14) + slim feature-space AE + YOLOv8n-cls",
+        "model": dict(use_pe=True, use_tf=True, use_ae=True, fusion="linear",
+                      tf_backbone="mobilevit_xxs", ae_space="feature", tf_stage=3),
+    },
+    "C2-28": {
+        "label": "MobileViT-XXS stage2 (28x28) + slim feature-space AE + YOLOv8n-cls",
+        "model": dict(use_pe=True, use_tf=True, use_ae=True, fusion="linear",
+                      tf_backbone="mobilevit_xxs", ae_space="feature", tf_stage=2),
     },
     "C3": {
         "label": "EfficientViT-B0 + slim feature-space AE + YOLOv8n-cls",

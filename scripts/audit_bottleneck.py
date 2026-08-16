@@ -185,7 +185,9 @@ def main() -> int:
 
     F_RGB, F_PE, F_TF, Z_AE, LAB = [], [], [], [], []
     PE_DELTA, TF_REL_DELTA = [], []
-    floor7, floor28 = [], []
+    # Spatial floors for every candidate grid, on the SAME images.
+    GRIDS = (7, 14, 28)
+    floors_acc = {g: [] for g in GRIDS}
 
     with torch.no_grad():
         for i in range(0, len(samples), args.batch_size):
@@ -218,7 +220,7 @@ def main() -> int:
             LAB += [ci for _, ci, _ in batch]
 
             # spatial-resolution floor: what a purely spatial grid of this size holds
-            for g, acc in ((grid, floor7), (28, floor28)):
+            for g, acc in ((g_, floors_acc[g_]) for g_ in GRIDS):
                 down = F.interpolate(x, size=(g, g), mode="area")
                 up = F.interpolate(down, size=(224, 224), mode="bilinear", align_corners=False)
                 for k in range(x.shape[0]):
@@ -277,7 +279,14 @@ def main() -> int:
            ((F_RGB, "F_RGB"), (F_PE, "F_PE"), (F_TF, "F_TF"), (Z_AE, "Z_AE"))}
 
     agg = lambda L: {k: float(np.mean([r[k] for r in L])) for k in ("mse", "psnr", "ssim")}  # noqa: E731
-    floors = {"grid_7x7": agg(floor7), "grid_28x28": agg(floor28)}
+    floors = {}
+    for g in GRIDS:
+        f = agg(floors_acc[g])
+        f["cell_px"] = 224 // g
+        f["spatial_compression_vs_224"] = round((224 * 224) / (g * g), 1)
+        f["latent_dims_at_64ch"] = 64 * g * g
+        f["latent_compression_vs_input"] = round(3 * 224 * 224 / (64 * g * g), 2)
+        floors[f"grid_{g}x{g}"] = f
 
     report = {
         "purpose": "Stage C2-2 information-preservation audit for candidate C2",
@@ -306,9 +315,11 @@ def main() -> int:
         json.dump(report, fh, indent=2, default=str)
 
     # ---- console summary --------------------------------------------------- #
-    print("\n=== spatial-resolution floor (down->up through a grid) ===")
+    print("\n=== spatial-resolution floor (down->up through a grid, identical images) ===")
+    print(f"  {'grid':<12}{'cell':>7}{'MSE':>10}{'PSNR':>9}{'SSIM':>8}{'latent@64ch':>13}{'compr.':>9}")
     for k, v in floors.items():
-        print(f"  {k:<12} MSE {v['mse']:.5f}   PSNR {v['psnr']:6.2f} dB   SSIM {v['ssim']:.4f}")
+        print(f"  {k:<12}{str(v['cell_px'])+'px':>7}{v['mse']:>10.5f}{v['psnr']:>9.2f}"
+              f"{v['ssim']:>8.4f}{v['latent_dims_at_64ch']:>13,}{v['latent_compression_vs_input']:>8.1f}x")
 
     print("\n=== representation statistics ===")
     print(f"{'representation':<32}{'dims':>7}{'norm':>10}{'across/within':>15}{'cos(img_i,img_j)':>18}")
@@ -370,7 +381,7 @@ def make_figures(samples, classes, out_dir, device, grid) -> None:
 
     if not rows:
         return
-    fig, axes = plt.subplots(len(rows), 4, figsize=(11, 2.5 * len(rows)), dpi=130)
+    fig, axes = plt.subplots(len(rows), 5, figsize=(13.5, 2.5 * len(rows)), dpi=130)
     if len(rows) == 1:
         axes = axes[None, :]
     for r, (group, cname, path) in enumerate(rows):
@@ -378,12 +389,12 @@ def make_figures(samples, classes, out_dir, device, grid) -> None:
                          dtype=np.float32) / 255.0
         x = torch.from_numpy(img).permute(2, 0, 1)[None]
         panels = [("original", img)]
-        for g in (28, grid):
+        for g in (28, 14, 7):
             up = F.interpolate(F.interpolate(x, size=(g, g), mode="area"),
                                size=(224, 224), mode="bilinear", align_corners=False)
             panels.append((f"{g}x{g} spatial floor", up[0].permute(1, 2, 0).numpy()))
         err = np.abs(img - panels[-1][1]).mean(axis=2)
-        panels.append((f"|error| at {grid}x{grid}", err))
+        panels.append(("|error| at 7x7", err))
 
         for k, (title, arr) in enumerate(panels):
             ax = axes[r, k]
@@ -395,8 +406,8 @@ def make_figures(samples, classes, out_dir, device, grid) -> None:
             if k == 0:
                 ax.set_ylabel(f"{group}\n{cname[:22]}", fontsize=6.5, rotation=0,
                               ha="right", va="center", labelpad=42)
-    fig.suptitle("What a 7x7 spatial grid can hold, vs C0's 28x28 "
-                 "(spatial floor -- the 64-channel latent can carry more)", fontsize=10)
+    fig.suptitle("Spatial floor at each candidate grid, identical images "
+                 "(3-channel floor -- the 64-channel latent can carry more)", fontsize=10)
     fig.tight_layout()
     out = os.path.join(out_dir, "spatial_floor_grid.png")
     fig.savefig(out, bbox_inches="tight")
