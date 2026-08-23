@@ -283,7 +283,7 @@ class Campaign:
 
     # ---------------- execution ----------------
     def run(self, rid: str, epochs=None, extra_args=(), force=False, gpu="",
-            device: str = "cuda") -> dict:
+            device: str = "cuda", checkpoint_every: int = 1) -> dict:
         r = self.manifest["runs"][rid]
         if r["status"] in TERMINAL_OK and not force:
             print(f"[{rid}] {r['status']} -- skipping ({r.get('reason','')})")
@@ -292,6 +292,26 @@ class Campaign:
         scratch = os.path.join(self.scratch_root, rid)
         drive_out = os.path.join(self.ckpt_dir, rid)
         os.makedirs(drive_out, exist_ok=True)
+        os.makedirs(scratch, exist_ok=True)
+
+        # A new Colab runtime starts with empty scratch, so pull the resume point
+        # back from Drive first. Without this, --resume would find nothing and the
+        # run would silently restart from epoch 0.
+        resumed_from = None
+        for fn in ("last.pt", "metrics.csv", "train_summary.json"):
+            src = os.path.join(drive_out, fn)
+            if os.path.exists(src) and not os.path.exists(os.path.join(scratch, fn)):
+                shutil.copy2(src, os.path.join(scratch, fn))
+                if fn == "last.pt":
+                    resumed_from = src
+        if resumed_from:
+            try:
+                import torch
+                ep = torch.load(resumed_from, map_location="cpu",
+                                weights_only=False).get("epoch")
+                print(f"[{rid}] restoring resume point from Drive: {ep} epochs already done")
+            except Exception:  # noqa: BLE001
+                print(f"[{rid}] restoring resume point from Drive")
         r.update(status=RUNNING, start_time=time.strftime("%Y-%m-%dT%H:%M:%S"),
                  git_commit=git_commit(), gpu=gpu or r.get("gpu", ""),
                  checkpoint=os.path.join(drive_out, "checkpoint.pt"))
@@ -299,7 +319,8 @@ class Campaign:
 
         cmd = [sys.executable, os.path.join(REPO_ROOT, "scripts", "train.py"),
                "--config", os.path.join(REPO_ROOT, r["config"]),
-               "--device", device, "--out", scratch, "--mirror", drive_out]
+               "--device", device, "--out", scratch, "--mirror", drive_out,
+               "--resume", "--checkpoint-every", str(checkpoint_every)]
         if epochs:
             cmd += ["--epochs", str(epochs)]
         cmd += list(extra_args)

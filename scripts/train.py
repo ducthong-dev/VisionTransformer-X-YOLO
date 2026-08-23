@@ -181,6 +181,13 @@ def main() -> int:
                          "made on the complete validation split.")
     ap.add_argument("--limit-val-per-class", type=int, default=None)
     ap.add_argument("--num-workers", type=int, default=None)
+    ap.add_argument("--resume", action="store_true",
+                    help="resume from last.pt in --out if present: restores model, "
+                         "optimizer, scheduler, epoch, best-so-far and RNG state.")
+    ap.add_argument("--checkpoint-every", type=int, default=1, metavar="N",
+                    help="write the resumable last.pt every N epochs (default 1). "
+                         "Raise it for large models to cut Drive I/O; the cost of a "
+                         "crash then rises to N epochs.")
     ap.add_argument("--mirror", default=None, metavar="DIR",
                     help="after EVERY epoch, atomically copy this run's artifacts to "
                          "DIR (e.g. a Google Drive path). Crash durability only; it "
@@ -310,6 +317,65 @@ def main() -> int:
         except Exception as exc:              # noqa: BLE001 - durability must not kill a run
             print(f"  [mirror] WARNING: sync failed ({exc}); training continues")
 
+    # ---- resumable training state -----------------------------------------
+    # The best-val checkpoint above holds weights only, which cannot restart
+    # training: without optimizer moments, the LR-schedule step count and the
+    # epoch index, a resumed run is a different experiment. last.pt carries the
+    # full state so a disconnect costs at most `--checkpoint-every` epochs
+    # instead of the whole run.
+    import random as _random
+    last_path = os.path.join(out_dir, "last.pt")
+
+    def _save_last(ep_done: int):
+        payload = {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "epoch": ep_done,                 # epochs COMPLETED
+            "best": best,
+            "history": history,
+            "cfg": cfg, "classes": classes,
+            "rng": {
+                "python": _random.getstate(),
+                "numpy": np.random.get_state(),
+                "torch": torch.get_rng_state(),
+                "cuda": (torch.cuda.get_rng_state_all()
+                         if torch.cuda.is_available() else None),
+            },
+        }
+        tmp = last_path + ".tmp"
+        torch.save(payload, tmp)
+        os.replace(tmp, last_path)            # atomic: never a half-written resume point
+
+    def _load_last():
+        nonlocal best, history
+        if not (args.resume and os.path.exists(last_path)):
+            return 0
+        try:
+            ck = torch.load(last_path, map_location=device, weights_only=False)
+        except Exception as exc:              # noqa: BLE001
+            print(f"[{name}] WARNING: last.pt unreadable ({exc}); starting from epoch 0")
+            return 0
+        model.load_state_dict(ck["model"])
+        optimizer.load_state_dict(ck["optimizer"])
+        scheduler.load_state_dict(ck["scheduler"])
+        best = ck.get("best", -1.0)
+        history[:] = ck.get("history", [])
+        r = ck.get("rng") or {}
+        try:
+            if r.get("python"):  _random.setstate(r["python"])
+            if r.get("numpy") is not None: np.random.set_state(r["numpy"])
+            if r.get("torch") is not None: torch.set_rng_state(r["torch"].cpu())
+            if r.get("cuda") and torch.cuda.is_available():
+                torch.cuda.set_rng_state_all([t.cpu() for t in r["cuda"]])
+        except Exception as exc:              # noqa: BLE001
+            print(f"[{name}] WARNING: RNG state not restored ({exc}); "
+                  "the resumed run stays statistically valid but is not bit-identical")
+        done = int(ck.get("epoch", 0))
+        print(f"[{name}] RESUMED from last.pt: {done} epochs done, "
+              f"best_val_top1={best:.4f}, continuing at epoch {done + 1}")
+        return done
+
     # Instrumentation: reset CUDA peak-memory counters immediately before the
     # first training step, so the recorded peak covers training only and not
     # model construction or weight download. No-op off CUDA.
@@ -320,7 +386,13 @@ def main() -> int:
     if warmup_epochs:
         print(f"[{name}] stacked-AE warm-up: {warmup_epochs} reconstruction-only epochs")
 
-    for ep in range(protocol.epochs):
+    start_epoch = _load_last()
+    if start_epoch >= protocol.epochs:
+        print(f"[{name}] already complete ({start_epoch}/{protocol.epochs} epochs)")
+        _write_metrics(); _write_summary("completed"); _mirror()
+        return 0
+
+    for ep in range(start_epoch, protocol.epochs):
         t0 = time.time()
         ae_only = ep < warmup_epochs
         tr_stats = run_epoch(model, tl, device, protocol, cfg, optimizer, scheduler, ae_only=ae_only)
@@ -344,6 +416,9 @@ def main() -> int:
         # Durable after every epoch, so a disconnect costs at most one epoch.
         _write_metrics()
         _write_summary("running")
+        if args.checkpoint_every > 0 and ((ep + 1) % args.checkpoint_every == 0
+                                          or ep + 1 == protocol.epochs):
+            _save_last(ep + 1)
         _mirror()
 
     _write_metrics()
