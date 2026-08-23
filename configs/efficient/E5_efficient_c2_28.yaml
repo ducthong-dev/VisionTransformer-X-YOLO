@@ -1,0 +1,22 @@
+extends: ../_base.yaml
+name: E5_efficient_c2_28
+group: efficient
+description: >
+  EFFICIENT AE-TFPE -- the leading candidate (C2-28). Introduced during the Major
+  Revision; NOT the originally submitted method.
+
+  PE-RGB (unchanged) -> MobileViT-XXS truncated after stage 2 (28x28, 48 ch) ->
+  PE average-pooled to the grid and concatenated (51 ch) -> slim feature-space
+  sparse denoising AE (latent 64x28x28) -> 3 x ConvTranspose (28->56->112->224)
+  -> unmodified YOLOv8n-cls.
+
+  Every protocol value is inherited from _base.yaml so this arm is directly
+  comparable with A0 and the mechanism controls.
+model:
+  use_pe: true
+  use_tf: true
+  use_ae: true
+  fusion: linear
+  tf_backbone: mobilevit_xxs
+  tf_stage: 2
+  ae_space: feature

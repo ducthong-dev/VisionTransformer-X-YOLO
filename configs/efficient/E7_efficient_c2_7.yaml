@@ -1,0 +1,17 @@
+extends: ../_base.yaml
+name: E7_efficient_c2_7
+group: efficient
+description: >
+  EFFICIENT AE-TFPE at the 7x7 grid (C2-7) -- spatial-resolution control for E5.
+
+  Identical to E5 except the backbone runs to its final stage (7x7, 320 ch), so
+  the comparison isolates spatial resolution. Measured on a T4 this is the
+  SLOWEST viable candidate at batch 1 (8.028x baseline) despite having the fewest
+  FLOPs -- it is a scientific control, not an efficiency candidate.
+model:
+  use_pe: true
+  use_tf: true
+  use_ae: true
+  fusion: linear
+  tf_backbone: mobilevit_xxs
+  ae_space: feature

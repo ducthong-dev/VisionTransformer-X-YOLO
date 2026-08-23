@@ -181,6 +181,11 @@ def main() -> int:
                          "made on the complete validation split.")
     ap.add_argument("--limit-val-per-class", type=int, default=None)
     ap.add_argument("--num-workers", type=int, default=None)
+    ap.add_argument("--mirror", default=None, metavar="DIR",
+                    help="after EVERY epoch, atomically copy this run's artifacts to "
+                         "DIR (e.g. a Google Drive path). Crash durability only; it "
+                         "does not touch training. Copies at epoch boundaries, never "
+                         "per batch.")
     ap.add_argument("--override", action="append", default=[], metavar="DOTTED.KEY=VALUE",
                     help="override a config value, e.g. --override protocol.ae_loss_weight=1. "
                          "Repeatable. Recorded verbatim in the run's config.yaml.")
@@ -251,6 +256,60 @@ def main() -> int:
     history, best = [], -1.0
     ckpt = os.path.join(out_dir, "checkpoint.pt")
 
+    # ---- crash durability -------------------------------------------------
+    # metrics.csv and train_summary.json used to be written only AFTER the final
+    # epoch, so a runtime disconnect at epoch 25 of 30 lost every recorded metric.
+    # They are now rewritten each epoch (30 rows -- negligible), and optionally
+    # mirrored to durable storage at epoch boundaries. Instrumentation only:
+    # nothing here touches the model, the data, the optimiser or the RNG.
+    import csv as _csv
+
+    def _write_metrics():
+        if not history:
+            return
+        tmp = os.path.join(out_dir, ".metrics.csv.tmp")
+        keys = list({k: None for row in history for k in row})   # union, order-stable
+        with open(tmp, "w", newline="") as fh:
+            w = _csv.DictWriter(fh, fieldnames=keys)
+            w.writeheader()
+            w.writerows(history)
+        os.replace(tmp, os.path.join(out_dir, "metrics.csv"))    # atomic
+
+    def _write_summary(status: str):
+        payload = {
+            "name": name, "group": cfg.get("group"), "config": args.config,
+            "status": status, "best_val_top1": best,
+            "epochs_completed": len(history), "epochs_planned": protocol.epochs,
+            "train_seconds": round(time.time() - t_start, 1),
+            "protocol": asdict(protocol), "model": desc,
+            "environment": environment_info(), "device": device,
+            "checkpoint": ckpt, "peak_memory": peak_memory_stats(device),
+        }
+        tmp = os.path.join(out_dir, ".train_summary.json.tmp")
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh, indent=2, default=str)
+        os.replace(tmp, os.path.join(out_dir, "train_summary.json"))
+        return payload
+
+    def _mirror():
+        """Copy artifacts to durable storage. Never raises into the training loop."""
+        if not args.mirror:
+            return
+        try:
+            import shutil
+            os.makedirs(args.mirror, exist_ok=True)
+            for fn in os.listdir(out_dir):
+                if fn.startswith("."):
+                    continue
+                src, dst = os.path.join(out_dir, fn), os.path.join(args.mirror, fn)
+                if not os.path.isfile(src):
+                    continue
+                tmp = dst + ".tmp"
+                shutil.copy2(src, tmp)
+                os.replace(tmp, dst)          # atomic: a reader never sees a partial file
+        except Exception as exc:              # noqa: BLE001 - durability must not kill a run
+            print(f"  [mirror] WARNING: sync failed ({exc}); training continues")
+
     # Instrumentation: reset CUDA peak-memory counters immediately before the
     # first training step, so the recorded peak covers training only and not
     # model construction or weight download. No-op off CUDA.
@@ -282,23 +341,14 @@ def main() -> int:
             torch.save({"model": model.state_dict(), "cfg": cfg,
                         "epoch": ep + 1, "val_top1": best, "classes": classes}, ckpt)
 
-    import csv as _csv
-    with open(os.path.join(out_dir, "metrics.csv"), "w", newline="") as fh:
-        w = _csv.DictWriter(fh, fieldnames=list(history[0].keys()))
-        w.writeheader()
-        w.writerows(history)
+        # Durable after every epoch, so a disconnect costs at most one epoch.
+        _write_metrics()
+        _write_summary("running")
+        _mirror()
 
-    summary = {
-        "name": name, "group": cfg.get("group"), "config": args.config,
-        "best_val_top1": best, "epochs": protocol.epochs,
-        "train_seconds": round(time.time() - t_start, 1),
-        "protocol": asdict(protocol), "model": desc,
-        "environment": environment_info(), "device": device,
-        "checkpoint": ckpt,
-        "peak_memory": peak_memory_stats(device),
-    }
-    with open(os.path.join(out_dir, "train_summary.json"), "w") as fh:
-        json.dump(summary, fh, indent=2, default=str)
+    _write_metrics()
+    summary = _write_summary("completed")
+    _mirror()
 
     pm = summary["peak_memory"]
     if pm.get("available"):

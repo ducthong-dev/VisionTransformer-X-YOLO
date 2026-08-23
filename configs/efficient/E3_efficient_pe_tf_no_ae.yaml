@@ -1,0 +1,20 @@
+extends: ../_base.yaml
+name: E3_efficient_pe_tf_no_ae
+group: efficient
+description: >
+  EFFICIENT PE + TF, no auto-encoder. The closest available "AE removed" control
+  for E5.
+
+  DOCUMENTED CONFOUND: E5 fuses at the 28x28 grid and the AE decodes back to an
+  image; without the AE there is no decoder, so this arm necessarily fuses in
+  image space via the TF branch's 1x1 projection + upsample. E5 vs E3 therefore
+  differs by TWO things -- the auto-encoder AND the fusion space. That is
+  intrinsic to the architecture, not a design error: no cleaner "E5 minus AE"
+  exists. Attribute results accordingly and state the confound.
+model:
+  use_pe: true
+  use_tf: true
+  use_ae: false
+  fusion: linear
+  tf_backbone: mobilevit_xxs
+  tf_stage: 2
