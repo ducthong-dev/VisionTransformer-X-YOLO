@@ -16,27 +16,37 @@ evaluation, no corruption generation and no test access occurs in
 One archive, written by Cell 17 of the notebook:
 
 ```
-<DRIVE_ROOT>/campaign/for_local_evaluation.tar.gz
+<DRIVE_ROOT>/scientific/summaries/for_local_evaluation.tar.gz
 ```
 
 where `DRIVE_ROOT = /content/drive/MyDrive/AE_TFPE_MajorRevision`. It contains one
 folder per **COMPLETED** run plus `campaign_summary.csv` and
 `campaign_manifest.json`.
 
+> **Only the `scientific/` namespace is ever exported.** Drive holds a second,
+> physically separate tree, `preflight/`, containing smoke runs: 4 epochs on 4
+> images per class, produced to prove the plumbing on a T4. Those are **not
+> results**. Cell 17 refuses to run outside `scientific/` and re-checks every
+> exported run's provenance stamp before adding it to the archive, so a smoke
+> artifact cannot reach this machine. See `docs/PREFLIGHT_ISOLATION_PROTOCOL.md`.
+
 Prefer this over syncing the whole Drive folder: it excludes scratch, logs and
 failed runs, and is a few tens of MB rather than hundreds.
 
 ### Where each piece lives on Drive
 
+All paths below are relative to `<DRIVE_ROOT>/scientific/`.
+
 | Path | Contents |
 |---|---|
-| `campaign/campaign_manifest.json` | every run's status, params, timings, GPU, commit |
-| `campaign/campaign_summary.csv` | the same as a flat table |
+| `manifest/campaign_manifest.json` | every run's status, params, timings, GPU, commit |
+| `summaries/campaign_summary.csv` | the same as a flat table |
 | `checkpoints/<ID>/checkpoint.pt` | **best val top-1** weights + resolved config + class list |
 | `checkpoints/<ID>/config.yaml` | the exact resolved config, including `_overrides` |
 | `checkpoints/<ID>/metrics.csv` | per-epoch loss, top-1, top-5, AE recon/KL, lr, seconds, peak CUDA |
 | `checkpoints/<ID>/train_summary.json` | protocol, best val top-1, wall-clock, peak memory, environment |
 | `checkpoints/<ID>/environment.json` | commit, dirty flag, library versions, dataset fingerprints |
+| `checkpoints/<ID>/run_provenance.json` | run ID, namespace, smoke flag, epoch budget, per-class limits, full-data status, config/protocol/dataset hashes |
 | `logs/<ID>.log` | full stdout, appended across resumes |
 
 **The checkpoint is self-describing.** `checkpoint.pt` embeds `cfg` and `classes`, so

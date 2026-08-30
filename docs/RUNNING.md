@@ -70,6 +70,13 @@ python scripts/evaluate.py --run results/validation/A0_smoke \
 python scripts/analyze_complexity.py --skip-latency
 ```
 
+> Steps 4 and 5 pass `--limit-per-class`, so they are smoke runs: the trainer
+> stamps them `namespace: preflight`, `smoke_test: true`,
+> `timing_basis: SMOKE_TIMING_ONLY`, and their epoch times must never be used to
+> project full-data runtime. `--out` still controls where they land, so these
+> local commands are unaffected. On Colab the namespace also selects the Drive
+> directory — see `docs/PREFLIGHT_ISOLATION_PROTOCOL.md`.
+
 **Never run locally:** the full corruption benchmark, any full-dataset training,
 the ablation matrix, or latency benchmarking. `analyze_complexity.py` without
 `--skip-latency` will still run on MPS, but it stamps every result

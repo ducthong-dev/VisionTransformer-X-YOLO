@@ -4,6 +4,11 @@
     python scripts/train.py --config configs/aetfpe_full.yaml
     python scripts/train.py --config configs/baseline_rgb.yaml --epochs 1 --limit-per-class 4
 
+The second form is a smoke test, so it is routed to the `preflight` artifact
+namespace automatically and stamped `SMOKE_TIMING_ONLY`. A run is `scientific`
+only when it uses the full data with no smoke flag; see
+docs/PREFLIGHT_ISOLATION_PROTOCOL.md.
+
 One loop serves every arm, so "identical experimental conditions" is enforced by
 construction rather than asserted. When the arm has an auto-encoder, the AE loss
 is optimised jointly with the classification loss:
@@ -44,6 +49,7 @@ from aetfpe.data import (  # noqa: E402
 from aetfpe.metrics import summarize  # noqa: E402
 from aetfpe.models import build_model  # noqa: E402
 from aetfpe.models.classifier import classifier_forward  # noqa: E402
+from aetfpe import provenance as prov  # noqa: E402
 from aetfpe.seeding import seed_everything  # noqa: E402
 
 
@@ -196,7 +202,46 @@ def main() -> int:
     ap.add_argument("--override", action="append", default=[], metavar="DOTTED.KEY=VALUE",
                     help="override a config value, e.g. --override protocol.ae_loss_weight=1. "
                          "Repeatable. Recorded verbatim in the run's config.yaml.")
+    ap.add_argument("--run-id", default=None, metavar="ID",
+                    help="campaign run ID stamped into this run's provenance record. "
+                         "Defaults to the config name.")
+    ap.add_argument("--namespace", default=None, choices=list(prov.NAMESPACES),
+                    help="artifact namespace. Default: 'preflight' when this is a smoke "
+                         "run (--smoke-test or any --limit-*), otherwise 'scientific'. "
+                         "Declaring 'scientific' for a limited run is refused.")
+    ap.add_argument("--smoke-test", action="store_true",
+                    help="mark this run as a plumbing test. Its timing is labelled "
+                         "SMOKE TIMING ONLY and it may only write to the preflight "
+                         "namespace.")
+    ap.add_argument("--preflight-stop-after", type=int, default=None, metavar="N",
+                    help="PREFLIGHT ONLY: exit cleanly after epoch N with the resume "
+                         "point written, to test crash recovery. Requires --smoke-test.")
     args = ap.parse_args()
+
+    # ---- namespace: which half of the artifact tree may this run touch? -----
+    # A smoke run and the scientific run share a config, a run ID and every file
+    # name. The only thing that keeps them apart is that they are never allowed
+    # to write to the same place, so the decision is made here, once, before any
+    # directory is created.
+    limited = any(v is not None for v in (args.limit_per_class, args.limit_train_per_class,
+                                          args.limit_val_per_class))
+    is_smoke = bool(args.smoke_test or limited)
+    namespace = args.namespace or (prov.NS_PREFLIGHT if is_smoke else prov.NS_SCIENTIFIC)
+    if namespace == prov.NS_SCIENTIFIC and is_smoke:
+        raise SystemExit(
+            "REFUSED: --namespace scientific with "
+            + ("--smoke-test" if args.smoke_test else "a --limit-* subset")
+            + ". A scientific artifact must be produced from full data with no smoke "
+              "flag; route this run to --namespace preflight instead.")
+    if namespace == prov.NS_PREFLIGHT and not is_smoke:
+        raise SystemExit(
+            "REFUSED: --namespace preflight without --smoke-test. The preflight "
+            "namespace exists for disposable plumbing tests; a full-data run belongs "
+            "in the scientific namespace.")
+    if args.preflight_stop_after is not None and not args.smoke_test:
+        raise SystemExit("REFUSED: --preflight-stop-after requires --smoke-test. It "
+                         "deliberately truncates training and must never touch a "
+                         "scientific run.")
 
     cfg = load_experiment(args.config)
     apply_overrides(cfg, args.override)
@@ -246,13 +291,39 @@ def main() -> int:
         else max(0.0, 0.5 * (1 + np.cos(np.pi * (s - warm) / max(steps - warm, 1)))),
     )
 
+    train_fp = dataset_fingerprint(train_root, classes)
+    val_fp = dataset_fingerprint(val_root, classes)
+    run_id = args.run_id or name
+    provenance = prov.build(
+        run_id=run_id, namespace=namespace, smoke_test=is_smoke,
+        config_path=args.config, cfg=cfg, protocol=protocol,
+        epochs_requested=protocol.epochs,
+        limit_per_class=args.limit_per_class,
+        limit_train_per_class=args.limit_train_per_class,
+        limit_val_per_class=args.limit_val_per_class,
+        train_fp=train_fp, val_fp=val_fp,
+        train_images_used=len(tr), val_images_used=len(va),
+        git_commit=environment_info().get("git_commit", ""),
+        extra={"out_dir": out_dir, "mirror": args.mirror, "device": device},
+    )
+    prov.save(out_dir, provenance)
+
     save_run_provenance(out_dir, cfg, protocol, extra={
         "model": desc,
         "classes": classes,
-        "train_fingerprint": dataset_fingerprint(train_root, classes),
-        "val_fingerprint": dataset_fingerprint(val_root, classes),
+        "train_fingerprint": train_fp,
+        "val_fingerprint": val_fp,
         "device": device,
+        "provenance": provenance,
     })
+
+    print(f"[{name}] namespace={namespace} run_id={run_id} smoke_test={is_smoke} "
+          f"timing_basis={provenance['timing_basis']}")
+    print(f"[{name}] provenance {prov.describe(provenance)}")
+    if is_smoke:
+        print(f"[{name}] SMOKE TIMING ONLY -- {len(tr)} train images is a plumbing "
+              f"subset of {train_fp['num_images']:,}. Epoch times below MUST NOT be "
+              "used to project full-data runtime or to update any cost model.")
 
     print(f"[{name}] device={device} classes={len(classes)} "
           f"train={len(tr)} val={len(va)} epochs={protocol.epochs}")
@@ -284,13 +355,17 @@ def main() -> int:
 
     def _write_summary(status: str):
         payload = {
-            "name": name, "group": cfg.get("group"), "config": args.config,
+            "name": name, "run_id": run_id, "group": cfg.get("group"),
+            "config": args.config, "namespace": namespace, "smoke_test": is_smoke,
+            "timing_basis": provenance["timing_basis"],
             "status": status, "best_val_top1": best,
             "epochs_completed": len(history), "epochs_planned": protocol.epochs,
+            "train_images": len(tr), "val_images": len(va),
             "train_seconds": round(time.time() - t_start, 1),
             "protocol": asdict(protocol), "model": desc,
             "environment": environment_info(), "device": device,
             "checkpoint": ckpt, "peak_memory": peak_memory_stats(device),
+            "provenance": provenance,
         }
         tmp = os.path.join(out_dir, ".train_summary.json.tmp")
         with open(tmp, "w") as fh:
@@ -335,6 +410,7 @@ def main() -> int:
             "best": best,
             "history": history,
             "cfg": cfg, "classes": classes,
+            "provenance": provenance,
             "rng": {
                 "python": _random.getstate(),
                 "numpy": np.random.get_state(),
@@ -356,6 +432,18 @@ def main() -> int:
         except Exception as exc:              # noqa: BLE001
             print(f"[{name}] WARNING: last.pt unreadable ({exc}); starting from epoch 0")
             return 0
+
+        # A resume point is only a resume point for the experiment that wrote it.
+        # Restoring a 4-epoch smoke run's weights into the 30-epoch scientific run
+        # would produce a checkpoint that is neither, so a mismatch stops the run
+        # instead of silently restarting or silently continuing.
+        found = ck.get("provenance") or {}
+        mismatches = prov.compare(provenance, found)
+        if mismatches:
+            raise SystemExit(prov.refuse("resume from last.pt", run_id, last_path, mismatches)
+                             + "\nTo start this experiment from scratch, move that "
+                               "directory aside first -- this tool will not do it for you.\n")
+
         model.load_state_dict(ck["model"])
         optimizer.load_state_dict(ck["optimizer"])
         scheduler.load_state_dict(ck["scheduler"])
@@ -420,6 +508,17 @@ def main() -> int:
                                           or ep + 1 == protocol.epochs):
             _save_last(ep + 1)
         _mirror()
+
+        # Deterministic stand-in for a Colab disconnect: everything durable has
+        # just been written and mirrored, so the state on Drive is exactly what a
+        # crash at this instant would have left behind.
+        if args.preflight_stop_after and ep + 1 >= args.preflight_stop_after:
+            _save_last(ep + 1)
+            _write_summary("interrupted_preflight")
+            _mirror()
+            print(f"[{name}] PREFLIGHT STOP after epoch {ep + 1}/{protocol.epochs} -- "
+                  "resume point written and mirrored; exiting as an interrupted run")
+            return 0
 
     _write_metrics()
     summary = _write_summary("completed")
