@@ -1,15 +1,20 @@
-# AE-TFPE revision framework.
+# AE-TFPE revision framework -- LOCAL EVALUATION environment.
+#   macOS / Apple Silicon, CPU or MPS. Python 3.10.
 #
-# Works on both target environments:
-#   LOCAL  macOS / Apple Silicon, CPU or MPS
-#   COLAB  Linux / NVIDIA CUDA
+# THIS FILE IS NOT FOR COLAB. Use requirements-colab.txt there
+# (scripts/colab_setup.sh already does). The pins below are chosen to reproduce
+# docs/reproducibility_reference.json byte-for-byte; on a current Colab Python
+# they have no wheels, so pip source-builds them and aborts the entire install.
 #
 # torch is deliberately NOT pinned to a build here: Colab ships its own CUDA
 # build and pinning would force a multi-GB reinstall. Install torch from the
 # environment's own channel first, then this file.
 #
-# NOTE: numpy must stay < 2.0. numpy 2.x breaks the torch<->numpy bridge for
-# torch 2.2 builds ("Failed to initialize NumPy: _ARRAY_API not found").
+# NOTE: numpy is held < 2.0 to match the reference environment recorded in
+# docs/reproducibility_reference.json (numpy 1.26.3). The original reason for
+# this pin -- "numpy 2.x breaks the torch<->numpy bridge" -- applied to torch
+# 2.2-era builds compiled against numpy 1.x, and is obsolete for any torch
+# built against numpy 2. Keep the pin here for reference-parity, not for that.
 
 torch>=2.1
 torchvision>=0.16
@@ -22,10 +27,11 @@ timm>=0.9
 
 # data / imaging
 #
-# Pillow is PINNED, not floated. The `jpeg` corruption round-trips through
-# libjpeg, whose quantisation/DCT path differs between libjpeg-turbo builds, so
-# its *pixel output* is codec-dependent. Every other corruption is pure numpy and
-# is reproducible on any conforming build. Verify with:
+# Pillow is PINNED, not floated, ON THIS MACHINE ONLY. The `jpeg` corruption
+# round-trips through libjpeg, whose quantisation/DCT path differs between
+# libjpeg-turbo builds, so its *pixel output* is codec-dependent. Every other
+# corruption is pure numpy and is reproducible on any conforming build.
+# Verify with:
 #     python scripts/verify_reproducibility.py --check
 # If that reports divergence only in the jpeg family, either match this pin or
 # drop the family -- do not ship a partially-divergent benchmark.

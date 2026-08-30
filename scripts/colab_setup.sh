@@ -4,17 +4,38 @@
 #   !bash scripts/colab_setup.sh
 #
 # Idempotent: safe to re-run after a runtime reset. Sets DATA_ROOT / OUTPUT_ROOT
-# and friends, installs pinned dependencies, and verifies CUDA is visible.
+# and friends, installs the training dependencies, and verifies CUDA is visible.
 #
 # Nothing here is macOS-specific; do not add Homebrew or Finder assumptions.
+#
+# DEPENDENCY POLICY -- read before changing the pip line.
+# This installs requirements-COLAB.txt, not requirements.txt. requirements.txt
+# is the LOCAL EVALUATION spec and pins numpy<2 / pillow==10.2.0 to hold the
+# corruption pixels identical to docs/reproducibility_reference.json. Those pins
+# have no wheels for current Colab Pythons, so applying them here aborts the
+# whole install transaction and leaves ultralytics/timm missing; and they are
+# pointless here because Colab trains only and cannot reach corruption data.
+# See requirements-colab.txt for the full rationale.
 
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DATA_ROOT="${DATA_ROOT:-/content/data/Plant_leaf_diseases_dataset}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-/content/output}"
-CACHE_ROOT="${CACHE_ROOT:-/content/cache}"
-MODEL_ROOT="${MODEL_ROOT:-/content/weights}"
+
+# Colab writes under /content. Anywhere else (e.g. an accidental local run) that
+# path is absent or read-only, so fall back to a scratch dir inside the repo
+# rather than spraying "Read-only file system" errors.
+if [ -d /content ] && [ -w /content ]; then
+  SCRATCH="/content"
+else
+  SCRATCH="${REPO_DIR}/.colab_scratch"
+  echo "note: /content is not writable -- this does not look like Colab."
+  echo "      falling back to ${SCRATCH}"
+fi
+
+DATA_ROOT="${DATA_ROOT:-${SCRATCH}/data/Plant_leaf_diseases_dataset}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRATCH}/output}"
+CACHE_ROOT="${CACHE_ROOT:-${SCRATCH}/cache}"
+MODEL_ROOT="${MODEL_ROOT:-${SCRATCH}/weights}"
 
 echo "=== AE-TFPE Colab setup ==="
 echo "repo        : ${REPO_DIR}"
@@ -25,23 +46,62 @@ mkdir -p "${OUTPUT_ROOT}" "${CACHE_ROOT}" "${MODEL_ROOT}" "$(dirname "${DATA_ROO
 
 echo
 echo "--- dependencies ---"
-pip install -q --upgrade pip
-pip install -q -r "${REPO_DIR}/requirements.txt"
+# --upgrade-strategy only-if-needed: satisfy the constraints without dragging
+# Colab's CUDA-matched torch/numpy/pillow into a reinstall.
+if ! pip install -q --upgrade-strategy only-if-needed -r "${REPO_DIR}/requirements-colab.txt"; then
+  echo
+  echo "!! pip install FAILED. Nothing above this line was installed --"
+  echo "   pip applies a requirements file as one transaction."
+  echo "   Re-run without -q to see the resolver output:"
+  echo "     pip install --upgrade-strategy only-if-needed -r requirements-colab.txt"
+  exit 1
+fi
+echo "ok"
 
 echo
 echo "--- environment ---"
 python - <<'PY'
-import torch, sys
+import sys
 print(f"python      : {sys.version.split()[0]}")
-print(f"torch       : {torch.__version__}")
-print(f"cuda avail  : {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"gpu         : {torch.cuda.get_device_name(0)}")
-    print(f"cuda version: {torch.version.cuda}")
-    free, total = torch.cuda.mem_get_info()
-    print(f"gpu memory  : {total/1e9:.1f} GB total, {free/1e9:.1f} GB free")
-else:
-    print("!! No CUDA device. Runtime > Change runtime type > GPU.")
+
+failed = []
+for mod in ("torch", "numpy", "PIL", "ultralytics", "timm", "transformers",
+            "yaml", "sklearn", "scipy", "pandas", "matplotlib", "thop"):
+    try:
+        m = __import__(mod)
+        print(f"{mod:<12}: {getattr(m, '__version__', 'ok')}")
+    except Exception as exc:                      # noqa: BLE001
+        print(f"{mod:<12}: !! {type(exc).__name__}: {exc}")
+        failed.append(mod)
+
+# Everything below needs torch and numpy to have imported; without them there is
+# nothing further to report, so fail with the collected list rather than a
+# secondary traceback that buries it.
+if not {"torch", "numpy"} & set(failed):
+    import torch
+    import numpy as np
+
+    print(f"cuda avail  : {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"gpu         : {torch.cuda.get_device_name(0)}")
+        print(f"cuda version: {torch.version.cuda}")
+        free, total = torch.cuda.mem_get_info()
+        print(f"gpu memory  : {total/1e9:.1f} GB total, {free/1e9:.1f} GB free")
+    else:
+        print("!! No CUDA device. Runtime > Change runtime type > GPU.")
+
+    # This replaces the old `numpy == 1.26.*` assertion: check that the bridge
+    # WORKS, rather than a version number that used to imply it.
+    try:
+        assert torch.from_numpy(np.zeros(4, dtype=np.float32)).sum().item() == 0.0
+        assert torch.zeros(4).numpy().shape == (4,)
+        print("np<->torch  : ok")
+    except Exception as exc:                      # noqa: BLE001
+        print(f"np<->torch  : !! BROKEN -- {exc}")
+        failed.append("numpy/torch bridge")
+
+if failed:
+    raise SystemExit("\n!! unusable environment: " + ", ".join(failed))
 PY
 
 cat > "${REPO_DIR}/configs/local.yaml" <<EOF

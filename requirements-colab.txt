@@ -1,0 +1,45 @@
+# Colab / CUDA TRAINING environment.
+#
+#   pip install -r requirements-colab.txt      (via scripts/colab_setup.sh)
+#
+# WHY THIS FILE EXISTS, SEPARATE FROM requirements.txt
+# ----------------------------------------------------
+# requirements.txt describes the LOCAL EVALUATION machine, whose pins
+# (numpy<2, pillow==10.2.0) exist to keep the CORRUPTION PIXELS bit-identical
+# to docs/reproducibility_reference.json.
+#
+# Those pins must NOT be applied on Colab, for two reasons:
+#
+#   1. They are unsatisfiable there. numpy 1.26.x and pillow 10.2.0 publish no
+#      wheels for the Python that current Colab runtimes ship, so pip falls back
+#      to a source build and the whole `pip install -r` transaction aborts --
+#      which is why ultralytics and timm silently never got installed.
+#
+#   2. They are unnecessary there. Colab runs TRAINING only. The trainer cannot
+#      reach corruption or test data at all -- that is asserted by
+#      scripts/verify_no_test_access.py in Cell 6 -- so no pixel-level codec
+#      determinism is at stake in this environment.
+#
+# Consequently this file pins NOTHING that Colab already provides: torch,
+# torchvision, numpy and pillow are taken from the runtime's own CUDA-matched
+# stack. Downgrading numpy under a torch built against numpy 2.x breaks the
+# torch<->numpy bridge in exactly the way the old pin was trying to prevent.
+#
+# The codebase is numpy-2 clean (no removed aliases) and seeds every corruption
+# through np.random.default_rng(PCG64), whose stream is stable across numpy
+# major versions by NumPy's own compatibility policy.
+
+# model + training
+ultralytics>=8.3
+transformers>=4.37
+timm>=0.9
+
+# config
+PyYAML>=6.0
+
+# metrics, analysis, figures
+scikit-learn>=1.3
+scipy>=1.10
+pandas>=2.0
+matplotlib>=3.7
+thop>=0.1.1

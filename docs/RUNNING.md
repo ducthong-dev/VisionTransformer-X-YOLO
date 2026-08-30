@@ -10,6 +10,13 @@ belongs. **Nothing expensive runs on the laptop.**
 | Role | audit, implement, unit test, smoke test | **source of truth** for training and all runtime measurements |
 | Allowed | shape checks, tiny corruption samples, 1–2 epoch smoke tests on a few images per class | full corruption generation, full training, full evaluation, latency/throughput |
 
+> **Dependency specs are not interchangeable.** Local uses `requirements.txt`
+> (pinned: Python 3.10.x / NumPy 1.26.x / Pillow 10.2.0, for corruption-pixel
+> reproducibility). Colab uses `requirements-colab.txt` (training deps only, on
+> Colab's native CUDA stack) — `scripts/colab_setup.sh` handles this. Installing
+> `requirements.txt` on Colab aborts the whole install. See
+> [LOCAL_EVAL_ENVIRONMENT_RECOVERY.md](LOCAL_EVAL_ENVIRONMENT_RECOVERY.md).
+
 ## Paths
 
 Committed configs contain **no absolute paths**. They reference `${DATA_ROOT}`,
