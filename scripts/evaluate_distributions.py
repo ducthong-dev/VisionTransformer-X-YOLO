@@ -64,10 +64,14 @@ LABEL_MAPPING_NOTE = {
     "hard": "augmented_test_images_hardest",
 }
 
-# Decision-critical first: baseline, Original, Efficient, denoising objective,
-# major fusion alternatives, strongest external baseline. Then everything else.
-PRIORITY = ["A0", "A5", "E5", "D1", "F2", "F4", "B2"]
-SECONDARY = ["A1", "A3", "A4", "F1", "E3", "E7", "M1", "M2", "M3", "A2", "B1", "B3"]
+# Explicit evaluation waves. Wave 1 is the decision-critical evidence checkpoint and is
+# never delayed by later arrivals. Wave 2 completes the component-ablation sequence
+# A0 -> A1 -> A2 -> A3 -> A4 -> A5 (A0 and A5 are already covered by wave 1).
+WAVE_1_DECISION_CRITICAL = ["A0", "A5", "D1", "E5", "B2"]
+WAVE_2_COMPONENT_ABLATION = ["A1", "A2", "A3", "A4"]
+WAVE_3_REMAINING = ["F2", "F4", "F1", "E3", "E7", "M1", "M2", "M3", "B1", "B3"]
+PRIORITY = WAVE_1_DECISION_CRITICAL
+SECONDARY = WAVE_2_COMPONENT_ABLATION + WAVE_3_REMAINING
 
 ALIASES = {"F3": "A3", "F5": "A5", "F5_clean": "D1"}
 

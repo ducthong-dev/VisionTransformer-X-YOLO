@@ -53,8 +53,13 @@ from aetfpe.seeding import seed_everything, sha256_array  # noqa: E402
 BENCHMARK = "Controlled Synthetic Corruption Benchmark"
 NOT_CALLED = "real-world robustness benchmark"     # explicitly not this
 
+# Same wave order as scripts/evaluate_distributions.py, so every physical checkpoint
+# goes through an identical pipeline. Wave 1 is the decision-critical set; wave 2
+# completes the component ablation A0 -> A1 -> A2 -> A3 -> A4 -> A5.
 PRIMARY = ["A0", "A5", "D1", "E5", "B2"]
-SECONDARY_IF_CHEAP = ["F2", "F4"]
+WAVE_2_COMPONENT_ABLATION = ["A1", "A2", "A3", "A4"]
+SECONDARY_IF_CHEAP = WAVE_2_COMPONENT_ABLATION + ["F2", "F4"]
+
 ALIASES = {"F3": "A3", "F5": "A5", "F5_clean": "D1"}
 
 FIELDS = ["run_id", "benchmark", "family", "severity", "sample_id", "relative_path",

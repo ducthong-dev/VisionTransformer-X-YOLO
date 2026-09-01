@@ -35,13 +35,13 @@ ALIASES = {"F3": "A3", "F5": "A5", "F5_clean": "D1"}
 INVENTORY = [
     ("A0", "YOLOv8n-cls RGB baseline", 1488247, 1488247, "COMPLETED", 2282.7, 0.9976036424634556),
     ("A1", "PE-only", 1488247, 1488247, "COMPLETED", 2260.4, 0.9968847352024922),
-    ("A2", "TF-only (ViT-B/16)", 87289243, 1490587, "INCOMPLETE (26/50)", None, None),
+    ("A2", "TF-only (ViT-B/16)", 87289243, 1490587, "COMPLETED", 6432.3, 0.9964054636951833),
     ("A3", "PE+TF, no AE (= F3)", 87289243, 1490587, "COMPLETED", 6423.0, 0.9966450994488377),
     ("A4", "RGB + image-space AE", 1747290, 1747290, "COMPLETED", 2290.2, 0.9962856458183561),
     ("A5", "Original AE-TFPE full (= F5)", 87549123, 1750467, "COMPLETED", 6270.1, 0.9950874670500839),
     ("B1", "ResNet-50 baseline", 23587943, 23587943, "NOT YET RUN", None, None),
     ("B2", "EfficientNet-B0 baseline", 4057507, 4057507, "COMPLETED", 2634.4, 0.9988018212317278),
-    ("B3", "ViT-B/16 baseline", 85828647, 85828647, "NOT YET RUN", None, None),
+    ("B3", "ViT-B/16 baseline", 85828647, 85828647, "INCOMPLETE (2/50)", None, None),
     ("D1", "Original AE fusion, clean objective", 87549123, 1750467, "COMPLETED", 6741.4, 0.9944883776659478),
     ("E3", "Efficient PE+TF, no AE", 1637947, 1488427, "COMPLETED", 2228.4, 0.9964054636951833),
     ("E5", "Efficient AE-TFPE (C2-28)", 1716586, 1567066, "COMPLETED", 2305.9, 0.9877785765636233),
@@ -60,9 +60,8 @@ INVENTORY = [
 NOTES = {
     "E3": "confounded AE control: also changes the fusion space (grid -> image)",
     "F2": "the only arm that modifies the classifier stem",
-    "A2": "stalled at epoch 26/50; excluded from evaluation",
     "B1": "skipped by MAX_TRAIN_PARAMS=20,000,000; not scientifically impossible",
-    "B3": "skipped by MAX_TRAIN_PARAMS=20,000,000; the backbone the Original method uses",
+    "B3": "force-run 2026-09-01T18:04, stalled at epoch 2/50; excluded until it completes",
 }
 
 

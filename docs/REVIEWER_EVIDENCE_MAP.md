@@ -21,10 +21,11 @@ Labels: **[MEASURED]** · **[DERIVED]** · **[AWAITING DATA]** · **[BLOCKED]** 
 | **#10.6** architecture justification for the 28×28 grid | E7 (C2-7) = 0.84364 vs E5 = 0.98778 best val top-1 | **[MEASURED]** — supports retaining 28×28 **over the tested 7×7 control**; does not establish 28×28 as globally optimal (no 14×14 control) |
 | **#10.7** fairness — identical protocol for every arm | 16 runs, one frozen protocol, one seed, one dataset hash | **[MEASURED]** — `docs/RUN_INVENTORY.md` |
 | **#10.7** fair external comparison | B2 (EfficientNet-B0) = 0.99880, the **best** clean arm | **[MEASURED]** validation; **[AWAITING DATA]** test |
-| **#10.7** further external baselines | B1 (ResNet-50), B3 (ViT-B/16) | **[BLOCKED]** — not yet run; skipped by the 20 M-parameter budget policy, not by impossibility |
+| **#10.7** further external baselines | B1 (ResNet-50) | **[BLOCKED]** — not yet run; skipped by the 20 M-parameter budget policy |
+| **#10.7** ViT-B/16 external baseline | B3 | **[BLOCKED]** — force-run 2026-09-01T18:04, **stalled at 2/50**; resumable, ≈4 A100-h to finish |
 | **#11** robustness benchmark | Clean/Easy/Moderate/Hard | **[AWAITING DATA]** — *synthetic augmentation* robustness only (§2) |
 | **#11** robustness attribution vs plain augmentation | M3 vs E5 | **[AWAITING DATA]** |
-| **#12** component contribution (PE / TF / AE) | A1, A2, A3, A4, E3 | **[AWAITING DATA]**; **A2 [BLOCKED]** — stalled at epoch 26/50 |
+| **#12** component contribution (PE / TF / AE) | **A0 → A1 → A2 → A3 → A4 → A5**, plus E3 | **[AWAITING DATA]** — the ablation sequence is now **complete**: A2 finished 50/50 on 2026-09-01 |
 | **#12** fusion comparison | A5 vs F1 / F2 / F4 | **[AWAITING DATA]** · F2 **CONFOUNDED** — the only arm that modifies the classifier stem |
 | **#10** "noise-resilient latent features" | **Controlled Synthetic Corruption Benchmark** | **[AWAITING DATA]** — see §2; the Easy/Moderate/Hard sets **cannot** answer this |
 
@@ -58,9 +59,11 @@ These are already established and do not depend on evaluation:
 4. **Single seed.** No multi-seed claim. Paired statistics quantify test-sample
    uncertainty only.
 5. **The best clean arm is an off-the-shelf EfficientNet-B0**, not the proposed method.
-6. **Two external baselines (B1, B3) are absent**, one of which is the very backbone the
-   Original method builds on.
-7. **A2 is incomplete** (26/50 epochs) and is excluded rather than reported.
+6. **Two external baselines are absent.** B1 (ResNet-50) was never run. B3 (ViT-B/16) — the
+   very backbone the Original method builds on — was force-run but stalled at epoch 2/50
+   and is excluded; it is resumable in ≈4 A100-hours.
+7. **The component ablation is complete.** A2 finished 50/50 (best val top-1 0.9964055)
+   and is included; no arm in the A0–A5 sequence is missing.
 8. **Three controls are confounded** and are not presented as one-variable experiments:
    E3 (AE + fusion space), F2 (classifier stem), and the Easy/Moderate/Hard tiers
    (geometry + corruption).

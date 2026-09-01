@@ -9,13 +9,13 @@ labelled table and are never differenced against these A100-trained results.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | A0 | A0 | YOLOv8n-cls RGB baseline | 1,488,247 | 1,488,247 | COMPLETED | 0.9976036 | — | — | — | — | — |  |
 | A1 | A1 | PE-only | 1,488,247 | 1,488,247 | COMPLETED | 0.9968847 | — | — | — | — | — |  |
-| A2 | A2 | TF-only (ViT-B/16) | 87,289,243 | 1,490,587 | INCOMPLETE (26/50) | — | — | — | — | — | — | stalled at epoch 26/50; excluded from evaluation |
+| A2 | A2 | TF-only (ViT-B/16) | 87,289,243 | 1,490,587 | COMPLETED | 0.9964055 | — | — | — | — | — |  |
 | A3 | A3 | PE+TF, no AE (= F3) | 87,289,243 | 1,490,587 | COMPLETED | 0.9966451 | — | — | — | — | — |  |
 | A4 | A4 | RGB + image-space AE | 1,747,290 | 1,747,290 | COMPLETED | 0.9962856 | — | — | — | — | — |  |
 | A5 | A5 | Original AE-TFPE full (= F5) | 87,549,123 | 1,750,467 | COMPLETED | 0.9950875 | — | — | — | — | — |  |
 | B1 | B1 | ResNet-50 baseline | 23,587,943 | 23,587,943 | NOT YET RUN | — | — | — | — | — | — | skipped by MAX_TRAIN_PARAMS=20,000,000; not scientifically impossible |
 | B2 | B2 | EfficientNet-B0 baseline | 4,057,507 | 4,057,507 | COMPLETED | 0.9988018 | — | — | — | — | — |  |
-| B3 | B3 | ViT-B/16 baseline | 85,828,647 | 85,828,647 | NOT YET RUN | — | — | — | — | — | — | skipped by MAX_TRAIN_PARAMS=20,000,000; the backbone the Original method uses |
+| B3 | B3 | ViT-B/16 baseline | 85,828,647 | 85,828,647 | INCOMPLETE (2/50) | — | — | — | — | — | — | force-run 2026-09-01T18:04, stalled at epoch 2/50; excluded until it completes |
 | D1 | D1 | Original AE fusion, clean objective | 87,549,123 | 1,750,467 | COMPLETED | 0.9944884 | — | — | — | — | — |  |
 | E3 | E3 | Efficient PE+TF, no AE | 1,637,947 | 1,488,427 | COMPLETED | 0.9964055 | — | — | — | — | — | confounded AE control: also changes the fusion space (grid -> image) |
 | E5 | E5 | Efficient AE-TFPE (C2-28) | 1,716,586 | 1,567,066 | COMPLETED | 0.9877786 | — | — | — | — | — |  |

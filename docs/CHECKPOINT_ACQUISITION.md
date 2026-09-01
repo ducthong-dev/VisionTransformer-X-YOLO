@@ -73,7 +73,7 @@ Parent: `1ZQmrXsL9IZtqlFI8EkyO-R2MILaZRJI4`
 |---|---|---|
 | A0 | `1N2Rv3gxeOKh3-UT03HwMZcvAK4WPdGYk` | ~6 MB |
 | A1 | `1g2OByMZxwZf7oeQXlgAjXRF7MpBdiqTW` | ~6 MB |
-| A2 | `10vpVoITvy4RfXUeMHDAZpukKYA92pbNe` | 349 MB — **incomplete, skip** |
+| A2 | `10vpVoITvy4RfXUeMHDAZpukKYA92pbNe` | 349 MB — **now COMPLETE 50/50, download** |
 | A3 | `1aolJrjIjOeW95vRWKK6AudHAyULzNhGw` | 350 MB |
 | A4 | `1S-j1O5BbLLauEkFChwWDqrQ7qzs5IiIT` | ~7 MB |
 | A5 | `15Hf5yUzfq04mpTx9oM0RtymPrl06OCCI` | 351 MB |
@@ -88,12 +88,19 @@ Parent: `1ZQmrXsL9IZtqlFI8EkyO-R2MILaZRJI4`
 | M1 | `1LSsA0EKhHvtGzhQHeJl7n0YbKuiBdh5H` | ~6 MB |
 | M2 | `1MxIU5D3MWl078qvUMlEHhE6b5OsbmyJb` | ~6 MB |
 | M3 | `1Fskmtmi-C0pW4BCQ1P78eo5dJiWCG_qL` | ~6 MB |
+| B3 | `1zakFo7auy4qFeIjc_wyWmmZf6FrWSJnt` | 343 MB — **incomplete (2/50), do NOT download** |
 
-**≈ 2.4 GB** for the 16 evaluable runs.
+**≈ 2.75 GB** for the 17 evaluable runs (A2 included since 2026-09-01).
 
-**Fastest useful subset (≈ 1.1 GB)** — the seven decision-critical arms, enough to answer
-baseline / Original / Efficient / denoising / fusion / external baseline:
-**A0, E5, B2, M1** (small, ~35 MB) plus **A5, D1, F2, F4** (~1.4 GB).
+**Wave 1 — the decision-critical five (≈ 730 MB).** Enough for the whole first evidence
+checkpoint: **A0, E5, B2** (small, ~29 MB) plus **A5, D1** (~702 MB). This answers
+baseline / Original / Efficient / denoising objective / external baseline, and includes
+the headline **A5 vs D1** comparison on both benchmarks.
+
+**Wave 2 — completes the component ablation (≈ 712 MB).** Add **A1, A4** (~13 MB) and
+**A2, A3** (~699 MB), giving the full A0 → A1 → A2 → A3 → A4 → A5 sequence.
+
+**Wave 3 — the remainder (≈ 1.3 GB).** F1, F2, F4, E3, E7, M1, M2, M3.
 
 There is also `A0_protocol30_archive_1788120504`
 (`1MJxTaW_Kl0e3IWRWuTdEHEbiTtjGCwfZ`) — the superseded 30-epoch A0, correctly archived
