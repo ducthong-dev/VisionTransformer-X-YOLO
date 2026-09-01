@@ -155,7 +155,8 @@ def main() -> int:
     ap.add_argument("--verification", default="results/campaign/checkpoint_verification.json")
     ap.add_argument("--data-root", default=None)
     ap.add_argument("--out", default="results/evaluation")
-    ap.add_argument("--mapping", default="results/eval_integrity/clean_augmented_mapping.json")
+    ap.add_argument("--mapping", default="docs/evidence/clean_augmented_mapping.json",
+                    help="FROZEN mapping. Never regenerate it on another machine: os.listdir\n                          order is filesystem-dependent and a rebuild would be wrong.")
     ap.add_argument("--runs", nargs="*", default=None, help="explicit run ids; default = priority order")
     ap.add_argument("--distributions", nargs="*", default=None)
     ap.add_argument("--device", default="auto")

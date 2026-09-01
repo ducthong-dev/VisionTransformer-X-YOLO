@@ -112,6 +112,8 @@ def main() -> int:
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "dataset", "Plant_leaf_diseases_dataset"))
     ap.add_argument("--out", default="results/eval_integrity")
+    ap.add_argument("--frozen-mapping", default="docs/evidence/clean_augmented_mapping.json",
+                    help="authoritative mapping; a locally rebuilt one is only cross-checked against it")
     ap.add_argument("--verify-limit", type=int, default=400,
                     help="images per distribution to pixel-verify the mapping on")
     args = ap.parse_args()
@@ -179,9 +181,33 @@ def main() -> int:
 
     # ---- 3. mapping -------------------------------------------------------- #
     print("\n== 3. clean <-> augmented mapping ==")
-    m = build_mapping(clean_root, classes)
-    if m["total"] != EXPECTED_N:
-        failures.append(f"mapping covers {m['total']} images, expected {EXPECTED_N}")
+    rebuilt = build_mapping(clean_root, classes)
+    if rebuilt["total"] != EXPECTED_N:
+        failures.append(f"rebuilt mapping covers {rebuilt['total']} images, expected {EXPECTED_N}")
+
+    # The mapping follows os.listdir order, which differs between filesystems. The
+    # committed artifact is authoritative; a local rebuild is only ever a cross-check.
+    frozen_used = False
+    if os.path.exists(args.frozen_mapping):
+        fr = json.load(open(args.frozen_mapping))
+        m = {"total": len(fr["map"]), "class_start": fr.get("class_start", {}), "map": fr["map"]}
+        frozen_used = True
+        differing = sum(1 for k, v in m["map"].items() if rebuilt["map"].get(k) != v)
+        print(f"  using FROZEN mapping {args.frozen_mapping} ({len(m['map'])} entries)")
+        if differing:
+            print(f"  NOTE: a local rebuild differs on {differing}/{len(m['map'])} entries -- expected on a\n"
+                  f"        different filesystem (os.listdir order). The frozen mapping stays authoritative.")
+        else:
+            print("  a local rebuild reproduces it exactly on this filesystem")
+        report["checks"]["frozen_mapping"] = {
+            "path": args.frozen_mapping, "entries": len(m["map"]),
+            "local_rebuild_differs_on": differing,
+            "authoritative": "frozen",
+        }
+    else:
+        m = rebuilt
+        failures.append(f"frozen mapping {args.frozen_mapping} is MISSING -- refusing to treat a "
+                        "locally rebuilt, filesystem-order-dependent mapping as authoritative")
 
     keys = sorted(hashes[labels[0]].keys(), key=lambda k: (k.split("/")[0], int(re.search(r"img_(\d+)", k).group(1))))
     step = max(1, len(keys) // args.verify_limit)
@@ -262,10 +288,12 @@ def main() -> int:
         print("  NOTE: tiers are not monotone in mean absolute deviation -- record, do not relabel.")
 
     # ---- write ------------------------------------------------------------- #
-    with open(os.path.join(args.out, "clean_augmented_mapping.json"), "w") as fh:
-        json.dump({"rule": report["checks"]["mapping"]["rule"],
-                   "verdict": verdict, "class_start": m["class_start"],
-                   "map": m["map"]}, fh, indent=2)
+    # Write the LOCAL REBUILD under a distinct name. The frozen artifact in
+    # docs/evidence/ is never overwritten from here.
+    with open(os.path.join(args.out, "clean_augmented_mapping_rebuilt.json"), "w") as fh:
+        json.dump({"rule": report["checks"]["mapping"]["rule"], "verdict": verdict,
+                   "authoritative": False, "frozen_used": frozen_used,
+                   "class_start": rebuilt["class_start"], "map": rebuilt["map"]}, fh, indent=2)
     with open(os.path.join(args.out, "augmented_content_hashes.json"), "w") as fh:
         json.dump(hashes, fh)
     report["failures"] = failures
@@ -273,7 +301,7 @@ def main() -> int:
     with open(os.path.join(args.out, "distribution_verification.json"), "w") as fh:
         json.dump(report, fh, indent=2)
 
-    print(f"\nwrote {args.out}/{{distribution_verification,clean_augmented_mapping,augmented_content_hashes}}.json")
+    print(f"\nwrote {args.out}/{{distribution_verification,clean_augmented_mapping_rebuilt,augmented_content_hashes}}.json")
     if failures:
         print("\nFAILURES:")
         for f in failures:

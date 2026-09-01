@@ -1,0 +1,88 @@
+{
+  "note": "Reference digests for the Controlled Synthetic Corruption Benchmark, computed on the macOS/conda `multimedia-reproduce` environment. One digest per (family, severity) over the sorted (relative_path, pixel_sha256) pairs of all 8335 samples. Regenerating the benchmark elsewhere must reproduce these digests family by family. JPEG is the one family whose pixels can legitimately differ across libjpeg builds; a JPEG-only mismatch is recorded, not treated as a defect. Any OTHER family differing indicates a real reproducibility failure.",
+  "reference_environment": {
+    "python": "3.10.20",
+    "numpy": "1.26.3",
+    "pillow": "10.2.0"
+  },
+  "spec_sha256": "b206f1f0b29521c7d14386dcc25e4b44bec4a1b9c9badeff2c300433bb1d50c2",
+  "git_commit": "186605f2c1bdff0623daf6744f327c99e980db05",
+  "global_seed": 0,
+  "seed_rule": "derive_seed(relative_path, family, severity, base=global_seed)  [blake2b-64, aetfpe.seeding]",
+  "manifest_sha256": "cb768f098c8a5de2e76747d867a8b9b7818950f74ea68c41a05ad34c894a2c5f",
+  "manifest_rows": 150030,
+  "digests": {
+    "brightness/mild": {
+      "n": 8335,
+      "digest": "bc02ee26b5ecb0d11eb593b8d80b2880f74199428cf3bb5aeb07a224b29597af"
+    },
+    "brightness/moderate": {
+      "n": 8335,
+      "digest": "483802924e89aba3c2c50680a83ff61bf9ed9832f6f8324dd52099cb397d4d4f"
+    },
+    "brightness/severe": {
+      "n": 8335,
+      "digest": "c84c799ebe54843f063af8b896de02c60366c5ca0b2ac9e42e6eff61a20a5b9c"
+    },
+    "contrast/mild": {
+      "n": 8335,
+      "digest": "e3096d82decdbd7f9bbbe75acaef423ecda8ad00a1070b04ad05d21959ef2539"
+    },
+    "contrast/moderate": {
+      "n": 8335,
+      "digest": "e28da505d18f9ba318c617e471ba2a773169d12b8dc1d41060bbea827341ea47"
+    },
+    "contrast/severe": {
+      "n": 8335,
+      "digest": "fe75a9478850fb150bfb45b5a4ee0e5b2614c3ce44337dc159d926fa95bcae47"
+    },
+    "gaussian_blur/mild": {
+      "n": 8335,
+      "digest": "d78c1a21958f971b80e10cc6ecf9f04d58635691a10811492e418f4087540895"
+    },
+    "gaussian_blur/moderate": {
+      "n": 8335,
+      "digest": "0f87c27edc092b51a9256a8876b0d2cf314afed68aa78f6cf5870dd5571a0a0a"
+    },
+    "gaussian_blur/severe": {
+      "n": 8335,
+      "digest": "b1565a7adbc53699c8e76da826936aec3785ae7535ecf4232ba7cc0e4f1d3902"
+    },
+    "gaussian_noise/mild": {
+      "n": 8335,
+      "digest": "1f5a591db64131eb61f6d9dd376321981e4cab2c32ec078ef39b5ce51e1bd550"
+    },
+    "gaussian_noise/moderate": {
+      "n": 8335,
+      "digest": "b74a4e80b2a1d311254ac33cdcad4b23f7076c61b0830878c3495b37ab1f34e8"
+    },
+    "gaussian_noise/severe": {
+      "n": 8335,
+      "digest": "26a0631b2cc99be395f06005086d5c65c9eb3ef93f0a6f34dc51c2272bf0703e"
+    },
+    "jpeg/mild": {
+      "n": 8335,
+      "digest": "0b3a78888f628fd3f4c1b0ffea8071f01efa2cb602bfe801a40ba209949d70a5"
+    },
+    "jpeg/moderate": {
+      "n": 8335,
+      "digest": "36b4dfd04391e0cd845830c98ff4640a1c44cad4e249f43b1c61a77daebb6468"
+    },
+    "jpeg/severe": {
+      "n": 8335,
+      "digest": "c44d9c6efeee9e518c8064de217edb8c85f48491952c5839adba3ff1c3330e03"
+    },
+    "pepper/mild": {
+      "n": 8335,
+      "digest": "1a09668cff810bf68fdf51b8c7e57032d233033996258a91879ef6f029d0bfbb"
+    },
+    "pepper/moderate": {
+      "n": 8335,
+      "digest": "ba0325b14902634b2bfdca634797ccbf789591417740973d9d4f88ce0b94ab7d"
+    },
+    "pepper/severe": {
+      "n": 8335,
+      "digest": "0a1d04bef9b0df5116764063d63be3feea6381a11e068aef69e0e1829d475917"
+    }
+  }
+}
