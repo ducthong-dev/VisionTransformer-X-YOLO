@@ -171,3 +171,63 @@ clean vs Easy/Moderate/Hard) **is available** and may be used.
 - **Geometric transforms dominate the harder tiers** (§4).
 - **Single realisation.** One random draw per image per tier; no repetition, so
   corruption-sampling variance is unmeasurable.
+
+---
+
+## 8. Consequence: a controlled benchmark was added alongside these sets
+
+§4 and §5 establish that these four distributions cannot isolate noise robustness —
+~84 % of `hard` is flipped or rotated, and geometry, photometry, occlusion and noise
+vary together.
+
+**These sets are not discarded or modified.** They were part of the planned campaign,
+their severity ordering is verified monotone, and they remain a valid measurement of
+**synthetic augmentation robustness**.
+
+A second, separately labelled benchmark was added on 2026-09-02 to answer the
+reviewers' noise challenge without the geometric confound:
+
+> **Controlled Synthetic Corruption Benchmark** — 6 deterministic, label-preserving,
+> **non-geometric** families (Gaussian noise, impulse noise, Gaussian blur, brightness,
+> contrast, JPEG) × mild / moderate / severe, on the clean test split only.
+
+Specification: `configs/controlled_corruptions.yaml` (frozen, hashed).
+Freeze + manifest: `scripts/generate_controlled_corruptions.py` →
+`results/controlled_corruptions/`. Evaluation:
+`scripts/evaluate_controlled_corruptions.py` → `results/evaluation_controlled/`,
+a separate output tree from `results/evaluation/`.
+
+It was introduced **after** this audit revealed the geometric confounding, but **before**
+any model's test performance was inspected. It is a frozen specification, **not a
+pre-registration**. Rationale, parameters, seed rule, model set and statistics:
+`docs/GATE1_RESOLUTION_AND_ANALYSIS_PROTOCOL.md` §6.
+
+**The two benchmarks are reported separately and are never merged into a single
+unexplained average.**
+
+---
+
+## 9. Incidental data-quality finding — a duplicate pair in the clean test split
+
+Freezing the controlled benchmark surfaced 12 duplicate pixel hashes among 150,030
+corrupted samples. All 12 are the *same pair of source images* across the four
+**deterministic** families (blur, brightness, contrast, JPEG × 3 severities = 12); the
+two stochastic families differ because their seeds are derived from the file path.
+
+```
+test/Apple___healthy/image (1120).JPG
+test/Apple___healthy/image (163).JPG
+        both 11,624 bytes, file sha256 6b242d89b134aa87…, pixel-identical
+```
+
+These are **byte-identical duplicate files**. The clean test split therefore contains
+8,335 files but 8,334 distinct images.
+
+Impact is negligible and unbiased: every model sees the duplicate equally, so no
+model-vs-model comparison is affected, and 1 duplicate in 8,335 (0.012 %) cannot move
+an accuracy figure meaningfully. **The split is not modified** — the frozen 8,335-image
+listing is the authoritative test set every training run and both benchmarks refer to.
+It is recorded here so the count is not later mistaken for an error.
+
+The finding also confirms the integrity machinery works: deterministic corruptions
+produced identical output for identical input, exactly as specified.

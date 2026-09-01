@@ -1,0 +1,101 @@
+# Controlled Synthetic Corruption Benchmark — FROZEN SPECIFICATION
+#
+# Introduced 2 September 2026, AFTER the corruption-construction audit
+# (docs/CORRUPTION_PROTOCOL.md) showed that the pre-existing Easy/Moderate/Hard sets
+# mix photometric corruption with geometric augmentation — roughly 84 % of `hard`
+# images are flipped or rotated — and therefore cannot attribute degradation to noise
+# robustness. Frozen BEFORE any model's test performance was inspected.
+#
+# This is NOT a pre-registration: it was written after training completed. It is a
+# specification frozen ahead of results. See
+# docs/GATE1_RESOLUTION_AND_ANALYSIS_PROTOCOL.md §6.
+#
+# NAME:  Controlled Synthetic Corruption Benchmark
+# NOT:   "real-world robustness benchmark"
+#
+# It does NOT replace Clean/Easy/Moderate/Hard, which remain unchanged. The two
+# benchmarks are reported separately and are never merged into a single average.
+
+name: Controlled Synthetic Corruption Benchmark
+version: 1
+frozen: "2026-09-02"
+
+# Source: the authoritative clean test split only. Never train, tune, or select on these.
+source_split: test
+expected_images: 8335
+expected_classes: 39
+image_size: 224          # corruption is applied AFTER resize, so severity is
+                         # resolution-independent and matches the evaluation input
+
+# Deterministic seed rule. The RNG for one corrupted image is
+#     blake2b(global_seed | relative_path | family | severity)
+# implemented by aetfpe.seeding.derive_seed / image_rng. Iteration order, worker
+# count and batch size cannot change any pixel.
+global_seed: 0
+seed_rule: "derive_seed(relative_path, family, severity, base=global_seed)  [blake2b-64, aetfpe.seeding]"
+
+# EXCLUDED BY DESIGN — these change object pose or framing rather than degrading the
+# image, and are exactly the confound this benchmark exists to remove:
+#   rotation, flip, crop, translation, geometric warping, elastic transform.
+excluded_transform_classes:
+  - rotation
+  - flip
+  - crop
+  - translation
+  - geometric_warping
+
+# Display names for reporting. `pepper` is the registry key; it is reported as
+# impulse (salt-and-pepper) noise.
+display_names:
+  gaussian_noise: "Gaussian Noise"
+  pepper: "Impulse Noise (salt-and-pepper)"
+  gaussian_blur: "Gaussian Blur"
+  brightness: "Brightness"
+  contrast: "Contrast"
+  jpeg: "JPEG Compression"
+
+# Severity parameters, chosen a priori from the physical scale of each operator so the
+# three levels are visibly separated without saturating a stock classifier at chance
+# (1/39 = 2.6 %). They were NOT tuned against any model result and must not be.
+corruptions:
+
+  # Additive Gaussian noise, sigma in 0-255 units.
+  gaussian_noise:
+    mild:     {sigma: 8}
+    moderate: {sigma: 18}
+    severe:   {sigma: 35}
+
+  # Impulse / salt-and-pepper noise. `ratio` = fraction of whole pixels replaced.
+  # Included as the second noise family because it is the manuscript's own legacy
+  # Type 1 corruption, so it speaks directly to the reviewers' noise challenge.
+  pepper:
+    mild:     {ratio: 0.02, salt_vs_pepper: 0.5, per_channel: false}
+    moderate: {ratio: 0.05, salt_vs_pepper: 0.5, per_channel: false}
+    severe:   {ratio: 0.10, salt_vs_pepper: 0.5, per_channel: false}
+
+  # Separable isotropic Gaussian blur, sigma in pixels at 224x224. numpy float64
+  # with an explicit kernel, so it is Pillow-version independent.
+  gaussian_blur:
+    mild:     {sigma: 0.8}
+    moderate: {sigma: 1.6}
+    severe:   {sigma: 3.0}
+
+  # Multiplicative brightness. factor < 1 darkens. One direction only, so the three
+  # levels form a monotone sequence.
+  brightness:
+    mild:     {factor: 0.75}
+    moderate: {factor: 0.55}
+    severe:   {factor: 0.40}
+
+  # Contrast scaling about the per-image mean. factor < 1 reduces contrast.
+  contrast:
+    mild:     {factor: 0.70}
+    moderate: {factor: 0.45}
+    severe:   {factor: 0.25}
+
+  # JPEG round-trip. The one family whose pixel array can differ across libjpeg
+  # builds; the manifest stores pixel hashes so a mismatch fails loudly.
+  jpeg:
+    mild:     {quality: 40}
+    moderate: {quality: 20}
+    severe:   {quality: 10}

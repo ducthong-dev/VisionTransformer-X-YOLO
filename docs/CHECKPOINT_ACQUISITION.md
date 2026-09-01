@@ -101,15 +101,43 @@ rather than overwritten. **Do not download it**; it is not part of the 50-epoch 
 
 ## What happens next, automatically
 
+Two benchmarks, reported separately and never merged.
+
+**A — synthetic augmentation robustness** (Clean / Easy / Moderate / Hard):
+
 ```bash
 conda activate multimedia-reproduce
-python scripts/verify_checkpoints.py --data-root "$(python -c "import yaml;print(yaml.safe_load(open('configs/local.yaml'))['env']['DATA_ROOT'])")" --strict
+DR=$(python -c "import yaml;print(yaml.safe_load(open('configs/local.yaml'))['env']['DATA_ROOT'])")
+python scripts/verify_checkpoints.py --data-root "$DR" --strict
 python scripts/evaluate_distributions.py --device mps
 python scripts/paired_statistics.py
 python scripts/consolidated_evidence_table.py
 ```
 
+**B — Controlled Synthetic Corruption Benchmark** (6 non-geometric families x 3
+severities; already frozen, spec sha `b206f1f0…`, manifest sha `cb768f09…`,
+150,030 samples):
+
+```bash
+python scripts/evaluate_controlled_corruptions.py --device mps          # A0 A5 D1 E5 B2 F2 F4
+python scripts/controlled_corruption_report.py
+```
+
+Add `--check-hashes` to the first command to verify every corrupted image against the
+frozen pixel manifest as it is generated (slower, but proves the benchmark did not move).
+
+### Runtime **[ESTIMATE]**
+
+| Stage | Images / model | Small models | ViT models | Total |
+|---|---|---|---|---|
+| A — 4 distributions | 33,340 | ~3 min x 10 | ~15 min x 6 | **~2-3 h** |
+| B — 19 distributions | 158,365 | ~11 min x 3 | ~45 min x 4 | **~3.5-4 h** |
+
+Roughly **6-7 hours** end-to-end for both, dominated by the ViT-B/16 arms. Both runners
+are resumable, so this can be stopped and restarted freely. Ordering puts the
+decision-critical arms first in each: the A5-vs-D1 denoising test lands early.
+
 `verify_checkpoints.py` refuses anything that is smoke, wrong-namespace, wrong-dataset,
-not 50 epochs, or not the recorded `best_val_top1` selection. `evaluate_distributions.py`
-refuses to run on anything not ACCEPTED, and is resumable, so a partial download is fine —
-it evaluates what has arrived and picks up the rest later.
+not 50 epochs, or not the recorded `best_val_top1` selection. Both evaluators refuse to
+run on anything not ACCEPTED, and are resumable, so a partial download is fine -- they
+evaluate what has arrived and pick up the rest later.

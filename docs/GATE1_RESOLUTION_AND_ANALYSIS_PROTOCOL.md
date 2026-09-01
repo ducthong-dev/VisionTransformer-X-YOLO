@@ -180,3 +180,102 @@ model-vs-model comparisons; degradation profiles across three severity tiers.
 **Cannot:** multi-seed robustness; isolated noise resilience (§3); a clean-accuracy
 superiority claim for E5 (§1); per-corruption-family attribution; any claim about B1 or
 B3, which were not trained; any 50-epoch claim about A2, which stopped at 26.
+
+---
+
+## 6. Addition — the Controlled Synthetic Corruption Benchmark
+
+**Added 2 September 2026, after the corruption-construction audit, before any model's
+test performance was inspected.** Like the rest of this document, it is **not a
+pre-registration** — it is a specification frozen ahead of results.
+
+### 6.1 Why it was added
+
+`docs/CORRUPTION_PROTOCOL.md` established, by measurement, that the pre-existing
+Easy / Moderate / Hard sets mix photometric corruption with geometric augmentation:
+roughly **84 % of `hard` images are flipped or rotated**, and the tiers also carry
+occlusion (CoarseDropout, fog, rain, shadow) and colour shifts, all varying together.
+
+Degradation on those sets therefore **cannot be attributed specifically to noise
+robustness**, which is precisely what the reviewers' challenge concerns. The existing
+sets remain a valid robustness measurement of a *different* kind; they simply cannot
+carry the denoising claim.
+
+### 6.2 What it is
+
+**Name: Controlled Synthetic Corruption Benchmark.** It must never be called a
+*real-world robustness benchmark*.
+
+Six deterministic, label-preserving, **non-geometric** families at three fixed
+severities (mild / moderate / severe), applied to the authoritative 8,335-image clean
+test split only:
+
+| Family | Parameter | mild | moderate | severe |
+|---|---|---|---|---|
+| Gaussian noise | sigma (0–255) | 8 | 18 | 35 |
+| Impulse noise (salt-and-pepper) | ratio | 0.02 | 0.05 | 0.10 |
+| Gaussian blur | sigma (px @224) | 0.8 | 1.6 | 3.0 |
+| Brightness | multiplicative factor | 0.75 | 0.55 | 0.40 |
+| Contrast | factor about per-image mean | 0.70 | 0.45 | 0.25 |
+| JPEG compression | quality | 40 | 20 | 10 |
+
+Impulse noise is the second noise family because it *is* the manuscript's own legacy
+Type 1 corruption, so it speaks directly to the reviewers' noise challenge rather than
+being chosen for convenience.
+
+**Excluded by design:** rotation, flip, crop, translation, geometric warping. These
+change pose or framing rather than degrading the image, and are the confound the
+benchmark exists to remove.
+
+Parameters were fixed a priori from the physical scale of each operator, before any
+model was run against them, and **must not be retuned after seeing results**. No family
+was added to improve the method's apparent performance.
+
+### 6.3 Reproducibility
+
+Every corrupted pixel is a pure function of
+
+```
+derive_seed(relative_path, family, severity, base=global_seed)   # blake2b-64
+```
+
+so iteration order, worker count and batch size cannot change a single pixel. Applied
+on the fly rather than written to disk (150,030 images would be ~12 GB for no gain),
+with the full specification — family, severity, parameters, derived seed and the
+`sha256_array` pixel hash of every one of the 150,030 corrupted samples — frozen to
+`results/controlled_corruptions/`, alongside the spec hash and the code commit.
+Determinism was verified by regeneration: 0 mismatches.
+
+### 6.4 Analytical separation — the two benchmarks are never merged
+
+| | Benchmark | Measures |
+|---|---|---|
+| **A** | Clean / Easy / Moderate / Hard | synthetic **augmentation** robustness (geometry + photometry + occlusion + noise, entangled) |
+| **B** | Controlled Synthetic Corruption Benchmark | targeted **corruption / noise** robustness (non-geometric, per-family) |
+
+They are reported in separate tables and are **never combined into a single
+unexplained average**. B is an *additional* reviewer-driven analysis; it does **not**
+replace A, and A is unchanged by its introduction.
+
+Neither benchmark alters §1: **GATE 1 was not passed on clean validation.**
+
+### 6.5 Models and comparisons
+
+Primary: **A0, A5, D1, E5, B2**, plus **F2, F4** if runtime permits. Remaining ablations
+only if runtime permits and they materially support a reviewer response.
+
+The most important comparison is **A5 vs D1** — the cleanest available test of whether
+the denoising objective improves robustness, since the two differ in the training
+objective alone. Also reported: **A5 vs A0**, **E5 vs A0**, **E5 vs B2**.
+
+### 6.6 Metrics and statistics
+
+Per model × family × severity: **Top-1**, **Macro-F1**, **absolute degradation from
+Clean**, **retention from Clean**. Every family is reported separately; a mean across
+families appears only as a clearly labelled secondary column, because averaging
+Gaussian noise with JPEG and brightness hides the failure modes the benchmark exists to
+expose. Severity curves where useful.
+
+Paired model-vs-model statistics (McNemar + paired bootstrap, Holm-corrected) are
+computed **within each corruption distribution** — valid at a single seed because both
+models see identical corrupted images. Training-seed variability remains **UNAVAILABLE**.
