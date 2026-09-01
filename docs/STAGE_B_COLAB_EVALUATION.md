@@ -139,5 +139,24 @@ re-clones at the pinned commit, pulls completed artifacts back from Drive, and s
 completed (model, distribution) pair. Set `FORCE_RECOMPUTE = True` only to deliberately
 redo work.
 
-Before the first real run, set `REPO_COMMIT` to the commit you intend to evaluate at, and
-confirm `DATASET_ZIP_CANDIDATES` contains the archive's actual Drive path.
+## 5. Pinned commit and dataset resolution
+
+`REPO_COMMIT = e8ca7f55d3889d2e199e23d1bdf91f36d41bd814`, verified by a fresh clone from
+GitHub to contain all 27 required files (scripts, frozen protocol documents, and both
+evidence artifacts). The pin necessarily points one commit back: a commit cannot contain
+its own hash, so the commit that *sets* `REPO_COMMIT` is one later. That final commit
+differs from the pinned one **only** in this notebook's configuration cell, and cell 2
+asserts the 14 critical files exist after checkout — a stale or mistyped pin fails loudly
+rather than producing quietly wrong results.
+
+**Dataset.** Evaluation requires the three `augmented_test_images_*` sets, so it needs
+`Plant_leaf_diseases_dataset_with_augment.zip` (3.25 GB) — **not** the smaller archive the
+training notebook uses (`VisionTransformer_YOLO/dataset/Plant_leaf_diseases_dataset.zip`),
+which carries only train/val. The augmented archive sits in **"Shared with me"** and
+therefore has no `MyDrive/...` path. The notebook tries four path candidates first, in
+case a shortcut exists, then falls back to fetching it by file ID
+(`1zxW_UeYEYdvuRRpOWih0F5YLQUmWGbdj`) using the session's own Drive credentials.
+
+Either way the dataset gate is the real check: six listing hashes plus `dataset_sha256`
+must match the A100 training provenance, so an archive missing the augmented sets — or any
+wrong copy — is rejected before a single inference runs.
